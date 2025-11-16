@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
   fetchCurrentUser,
-  logout as logoutAction,
+  logoutUser,
   selectAuth,
 } from "@/features/auth/authSlice";
 
@@ -31,7 +31,7 @@ const useAuth = ({ redirectTo = null, protectedOnly = false } = {}) => {
 
   const logout = useMemo(
     () => () => {
-      dispatch(logoutAction());
+      dispatch(logoutUser());
     },
     [dispatch]
   );

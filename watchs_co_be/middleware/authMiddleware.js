@@ -20,4 +20,20 @@ const requireAuth = (req, res, next) => {
   }
 };
 
-module.exports = { requireAuth };
+// Optional auth - doesn't fail if no token, but sets req.user if valid token exists
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+    } catch (err) {
+      // Invalid token, but continue without user
+      req.user = null;
+    }
+  }
+  next();
+};
+
+module.exports = { requireAuth, optional: optionalAuth };

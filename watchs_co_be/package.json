@@ -4,9 +4,12 @@
   "description": "watch sales website",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "migrate": "db-migrate up --env dev --config database.cjs",
-    "rollback": "db-migrate down --env dev --config database.cjs"
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:unit": "jest --testPathPattern=unit",
+    "test:integration": "jest --testPathPattern=integration",
+    "migrate": "db-migrate up --env dev --config database.json",
+    "rollback": "db-migrate down --env dev --config database.json"
   },
   "author": "",
   "license": "ISC",
@@ -21,5 +24,28 @@
     "jsonwebtoken": "^9.0.2",
     "nodemon": "^3.1.10",
     "pg": "^8.15.6"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/migrations/",
+      "/tests/"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.test.js",
+      "**/?(*.)+(spec|test).js"
+    ],
+    "collectCoverageFrom": [
+      "controllers/**/*.js",
+      "models/**/*.js",
+      "middleware/**/*.js",
+      "utils/**/*.js",
+      "!**/node_modules/**"
+    ]
   }
 }
