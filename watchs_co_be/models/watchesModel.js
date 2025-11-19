@@ -11,6 +11,51 @@ const generateSlug = (text) => {
     .replace(/^-+|-+$/g, "");
 };
 
+const ensureSlugForWatch = async (watch) => {
+  if (!watch || watch.slug) return;
+
+  const baseParts = `${watch.brand || ""} ${watch.model || ""} ${
+    watch.reference || ""
+  }`.trim();
+  const baseSlug = generateSlug(baseParts) || "watch";
+  const uniqueSlug = `${baseSlug}-${watch.id}`;
+
+  const result = await query(
+    `UPDATE watches SET slug = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING slug`,
+    [uniqueSlug, watch.id]
+  );
+
+  watch.slug = result.rows[0]?.slug || uniqueSlug;
+};
+
+const ensureSlugs = async (watches = []) => {
+  const updates = watches
+    .filter((watch) => watch && !watch.slug)
+    .map((watch) => ensureSlugForWatch(watch));
+  await Promise.all(updates);
+};
+
+const ensureAllSlugs = async () => {
+  const batchSize = 500;
+  let processed = 0;
+
+  while (true) {
+    const result = await query(
+      `SELECT id, brand, model, reference, slug FROM watches 
+       WHERE slug IS NULL OR slug = ''
+       LIMIT $1`,
+      [batchSize]
+    );
+
+    if (result.rows.length === 0) break;
+
+    await ensureSlugs(result.rows);
+    processed += result.rows.length;
+  }
+
+  return processed;
+};
+
 // CREATE watch
 const insertWatch = async (data) => {
   const {
@@ -389,6 +434,8 @@ module.exports = {
   getSearchSuggestions,
   getFeaturedWatches,
   getRecommendedWatches,
+  ensureSlugs,
+  ensureAllSlugs,
   // Legacy exports for backward compatibility
   search: fullTextSearch,
 };

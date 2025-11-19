@@ -33,10 +33,12 @@ import {
 } from "@mui/icons-material";
 import {
   fetchWatchBySlug,
+  fetchWatchById,
   clearCurrentWatch,
 } from "@/features/watches/watchesSlice";
 import { addToCart } from "@/features/cart/cartSlice";
 import { addToWishlist, removeFromWishlist, checkWishlistStatus } from "@/features/wishlist/wishlistSlice";
+import { buildWatchDetailPath, parseWatchSlugParam } from "@/utils/watchRoutes";
 
 const ProductDetail = () => {
   const { slug } = useParams();
@@ -50,9 +52,16 @@ const ProductDetail = () => {
   const [tabValue, setTabValue] = useState(0);
 
   useEffect(() => {
-    if (slug) {
-      dispatch(fetchWatchBySlug(slug));
+    dispatch(clearCurrentWatch());
+    if (!slug) return;
+
+    const { type, value } = parseWatchSlugParam(slug);
+    if (type === "slug") {
+      dispatch(fetchWatchBySlug(value));
+    } else if (type === "id") {
+      dispatch(fetchWatchById(value));
     }
+
     return () => {
       dispatch(clearCurrentWatch());
     };
@@ -379,7 +388,7 @@ const ProductDetail = () => {
                 <Grid container spacing={3}>
                   {currentWatch.recommended.map((watch) => (
                     <Grid item xs={12} sm={6} md={4} key={watch.id}>
-                      <Card component={Link} to={`/shop/${watch.slug}`} sx={{ textDecoration: "none" }}>
+                      <Card component={Link} to={buildWatchDetailPath(watch)} sx={{ textDecoration: "none" }}>
                         <CardMedia
                           component="img"
                           height="200"

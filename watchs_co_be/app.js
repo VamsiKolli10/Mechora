@@ -1,5 +1,8 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
 const app = express();
@@ -16,11 +19,17 @@ const wishlistRoute = require("./routes/wishlist");
 const recentlyViewedRoute = require("./routes/recentlyViewed");
 const ordersRoute = require("./routes/orders");
 const accountRoute = require("./routes/account");
+const config = require("./config/secrets");
+const logger = require("./utils/logger");
+const { generalRateLimiter } = require("./middleware/rateLimiter");
 
 const allowedOrigins = (process.env.CLIENT_ORIGIN ||
   "http://localhost:5173,http://localhost:3000")
   .split(",")
   .map((origin) => origin.trim());
+
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
 
 app.use(
   cors({
@@ -33,7 +42,13 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+}));
+app.use(morgan(config.env === "production" ? "combined" : "dev", { stream: logger.stream }));
+app.use(cookieParser(config.cookies.secret));
+app.use(express.json({ limit: "1mb" }));
+app.use(generalRateLimiter);
 
 // API Routes
 app.use("/api/auth", authRoute);

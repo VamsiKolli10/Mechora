@@ -1,10 +1,4 @@
 const { query } = require("../db");
-const crypto = require("crypto");
-
-// Generate guest token
-const generateGuestToken = () => {
-  return crypto.randomBytes(32).toString("hex");
-};
 
 // Get or create cart for user
 const getOrCreateUserCart = async (userId) => {
@@ -29,7 +23,7 @@ const getOrCreateUserCart = async (userId) => {
 // Get or create cart for guest
 const getOrCreateGuestCart = async (guestToken) => {
   if (!guestToken) {
-    guestToken = generateGuestToken();
+    throw new Error("Guest token is required");
   }
 
   const existingCart = await query(
@@ -232,7 +226,6 @@ const mergeGuestCartIntoUserCart = async (guestToken, userId) => {
 };
 
 module.exports = {
-  generateGuestToken,
   getOrCreateUserCart,
   getOrCreateGuestCart,
   getCartWithItems,

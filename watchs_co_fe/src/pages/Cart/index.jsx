@@ -32,6 +32,8 @@ import {
   removeFromCart,
   clearCart,
 } from "@/features/cart/cartSlice";
+import { buildWatchDetailPath } from "@/utils/watchRoutes";
+import { getErrorMessage } from "@/utils/errors";
 
 const Cart = () => {
   const dispatch = useDispatch();
@@ -111,7 +113,7 @@ const Cart = () => {
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
+          {getErrorMessage({ error }, "Unable to load cart")}
         </Alert>
       )}
 
@@ -131,7 +133,7 @@ const Cart = () => {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <Stack spacing={1}>
-                      <Typography variant="h6" component={Link} to={`/shop/${item.slug}`}>
+                      <Typography variant="h6" component={Link} to={buildWatchDetailPath({ slug: item.slug, id: item.watch_id })}>
                         {item.brand_name || item.brand} {item.model}
                       </Typography>
                       {item.reference && (

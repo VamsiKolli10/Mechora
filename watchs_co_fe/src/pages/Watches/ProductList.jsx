@@ -36,7 +36,9 @@ import {
   ShoppingCart,
   ExpandMore,
 } from "@mui/icons-material";
+import Collapse from "@mui/material/Collapse";
 import { fetchWatches, setFilters, fetchBrands, fetchCollections } from "@/features/watches/watchesSlice";
+import { buildWatchDetailPath } from "@/utils/watchRoutes";
 import { addToCart } from "@/features/cart/cartSlice";
 import { addToWishlist, removeFromWishlist, checkWishlistStatus } from "@/features/wishlist/wishlistSlice";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -202,83 +204,86 @@ const ProductList = () => {
               {showFilters ? "Hide" : "Show"} Filters
             </Button>
 
-            {showFilters && (
-              <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Brand</InputLabel>
-                    <Select
-                      value={filters.brand_id || ""}
-                      onChange={(e) => handleFilterChange("brand_id", e.target.value)}
-                      label="Brand"
-                    >
-                      <MenuItem value="">All Brands</MenuItem>
-                      {brands.map((brand) => (
-                        <MenuItem key={brand.id} value={brand.id}>
-                          {brand.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
+            <Collapse in={showFilters}>
+              <Box
+                sx={{
+                  mt: 1,
+                  display: "grid",
+                  gap: 2,
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "repeat(2, minmax(0, 1fr))",
+                    lg: "repeat(4, minmax(0, 1fr))",
+                  },
+                }}
+              >
+                <FormControl fullWidth>
+                  <InputLabel>Brand</InputLabel>
+                  <Select
+                    value={filters.brand_id || ""}
+                    onChange={(e) => handleFilterChange("brand_id", e.target.value)}
+                    label="Brand"
+                  >
+                    <MenuItem value="">All Brands</MenuItem>
+                    {brands.map((brand) => (
+                      <MenuItem key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Collection</InputLabel>
-                    <Select
-                      value={filters.collection_id || ""}
-                      onChange={(e) => handleFilterChange("collection_id", e.target.value)}
-                      label="Collection"
-                    >
-                      <MenuItem value="">All Collections</MenuItem>
-                      {collections.map((collection) => (
-                        <MenuItem key={collection.id} value={collection.id}>
-                          {collection.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
+                <FormControl fullWidth>
+                  <InputLabel>Collection</InputLabel>
+                  <Select
+                    value={filters.collection_id || ""}
+                    onChange={(e) => handleFilterChange("collection_id", e.target.value)}
+                    label="Collection"
+                  >
+                    <MenuItem value="">All Collections</MenuItem>
+                    {collections.map((collection) => (
+                      <MenuItem key={collection.id} value={collection.id}>
+                        {collection.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Stock Status</InputLabel>
-                    <Select
-                      value={filters.stock_status || ""}
-                      onChange={(e) => handleFilterChange("stock_status", e.target.value)}
-                      label="Stock Status"
-                    >
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="in_stock">In Stock</MenuItem>
-                      <MenuItem value="out_of_stock">Out of Stock</MenuItem>
-                      <MenuItem value="pre_order">Pre-Order</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
+                <FormControl fullWidth>
+                  <InputLabel>Stock Status</InputLabel>
+                  <Select
+                    value={filters.stock_status || ""}
+                    onChange={(e) => handleFilterChange("stock_status", e.target.value)}
+                    label="Stock Status"
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    <MenuItem value="in_stock">In Stock</MenuItem>
+                    <MenuItem value="out_of_stock">Out of Stock</MenuItem>
+                    <MenuItem value="pre_order">Pre-Order</MenuItem>
+                  </Select>
+                </FormControl>
 
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Sort By</InputLabel>
-                    <Select
-                      value={`${filters.sort_by}_${filters.sort_order}`}
-                      onChange={(e) => {
-                        const [sort_by, sort_order] = e.target.value.split("_");
-                        handleFilterChange("sort_by", sort_by);
-                        handleFilterChange("sort_order", sort_order);
-                      }}
-                      label="Sort By"
-                    >
-                      <MenuItem value="created_at_DESC">Newest First</MenuItem>
-                      <MenuItem value="created_at_ASC">Oldest First</MenuItem>
-                      <MenuItem value="sale_price_ASC">Price: Low to High</MenuItem>
-                      <MenuItem value="sale_price_DESC">Price: High to Low</MenuItem>
-                      <MenuItem value="model_ASC">Name: A to Z</MenuItem>
-                      <MenuItem value="model_DESC">Name: Z to A</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
+                <FormControl fullWidth>
+                  <InputLabel>Sort By</InputLabel>
+                  <Select
+                    value={`${filters.sort_by}_${filters.sort_order}`}
+                    onChange={(e) => {
+                      const [sort_by, sort_order] = e.target.value.split("_");
+                      handleFilterChange("sort_by", sort_by);
+                      handleFilterChange("sort_order", sort_order);
+                    }}
+                    label="Sort By"
+                  >
+                    <MenuItem value="created_at_DESC">Newest First</MenuItem>
+                    <MenuItem value="created_at_ASC">Oldest First</MenuItem>
+                    <MenuItem value="sale_price_ASC">Price: Low to High</MenuItem>
+                    <MenuItem value="sale_price_DESC">Price: High to Low</MenuItem>
+                    <MenuItem value="model_ASC">Name: A to Z</MenuItem>
+                    <MenuItem value="model_DESC">Name: Z to A</MenuItem>
+                  </Select>
+                </FormControl>
 
-                <Grid item xs={12}>
+                <Box sx={{ gridColumn: "1 / -1" }}>
                   <Typography gutterBottom>Price Range</Typography>
                   <Slider
                     value={priceRange}
@@ -294,9 +299,9 @@ const ProductList = () => {
                     <Typography variant="body2">{formatPrice(priceRange[0])}</Typography>
                     <Typography variant="body2">{formatPrice(priceRange[1])}</Typography>
                   </Stack>
-                </Grid>
-              </Grid>
-            )}
+                </Box>
+              </Box>
+            </Collapse>
           </Stack>
         </Paper>
 
@@ -332,10 +337,10 @@ const ProductList = () => {
                       },
                     }}
                   >
-                    <Link
-                      to={`/shop/${watch.slug}`}
-                      style={{ textDecoration: "none", color: "inherit" }}
-                    >
+                      <Link
+                        to={buildWatchDetailPath(watch)}
+                        style={{ textDecoration: "none", color: "inherit" }}
+                      >
                       <CardMedia
                         component="img"
                         height="200"
@@ -350,7 +355,7 @@ const ProductList = () => {
                           {watch.brand_name || watch.brand}
                         </Typography>
                         <Link
-                          to={`/shop/${watch.slug}`}
+                          to={buildWatchDetailPath(watch)}
                           style={{ textDecoration: "none", color: "inherit" }}
                         >
                           <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>

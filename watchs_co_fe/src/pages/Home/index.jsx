@@ -34,6 +34,7 @@ import SectionHeading from "@/components/common/SectionHeading";
 import StatTile from "@/components/common/StatTile";
 import FeatureCard from "@/components/common/FeatureCard";
 import { Link as RouterLink } from "react-router-dom";
+import { buildWatchDetailPath } from "@/utils/watchRoutes";
 
 const highlightPieces = [
   {
@@ -736,7 +737,7 @@ const Home = () => {
                     ].filter(Boolean)}
                     actionLabel="View Details"
                     onAction={() =>
-                      (window.location.href = `/shop/${watch.slug}`)
+                      (window.location.href = buildWatchDetailPath(watch))
                     }
                   />
                 </Grid>

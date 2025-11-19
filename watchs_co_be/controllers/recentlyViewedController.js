@@ -1,10 +1,15 @@
 const RecentlyViewed = require("../models/recentlyViewedModel");
+const {
+  ensureGuestToken,
+  extractGuestToken,
+} = require("../utils/guestTokens");
 
 // Add to recently viewed
 exports.addItem = async (req, res) => {
   try {
     const userId = req.user?.id;
-    const guestToken = req.headers["x-guest-token"] || req.query.guest_token;
+    const guestContext = userId ? extractGuestToken(req) : ensureGuestToken(req, res);
+    const guestToken = guestContext?.rawToken;
     const { watch_id } = req.body;
 
     if (!watch_id) {
@@ -12,7 +17,10 @@ exports.addItem = async (req, res) => {
     }
 
     await RecentlyViewed.addToRecentlyViewed(userId, guestToken, watch_id);
-    res.json({ message: "Added to recently viewed" });
+    res.json({
+      message: "Added to recently viewed",
+      guest_token: guestContext?.signedToken,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -22,7 +30,8 @@ exports.addItem = async (req, res) => {
 exports.getRecentlyViewed = async (req, res) => {
   try {
     const userId = req.user?.id;
-    const guestToken = req.headers["x-guest-token"] || req.query.guest_token;
+    const guestContext = extractGuestToken(req);
+    const guestToken = guestContext?.rawToken;
     const limit = parseInt(req.query.limit) || 10;
 
     let items;
@@ -44,7 +53,8 @@ exports.getRecentlyViewed = async (req, res) => {
 exports.clearRecentlyViewed = async (req, res) => {
   try {
     const userId = req.user?.id;
-    const guestToken = req.headers["x-guest-token"] || req.query.guest_token;
+    const guestContext = extractGuestToken(req);
+    const guestToken = guestContext?.rawToken;
 
     await RecentlyViewed.clearRecentlyViewed(userId, guestToken);
     res.json({ message: "Recently viewed cleared" });
@@ -52,4 +62,3 @@ exports.clearRecentlyViewed = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-

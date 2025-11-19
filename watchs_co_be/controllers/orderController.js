@@ -1,12 +1,17 @@
 const Order = require("../models/orderModel");
 const Cart = require("../models/cartModel");
 const Watch = require("../models/watchesModel");
+const { extractGuestToken, verifyGuestToken } = require("../utils/guestTokens");
 
 // Create order from cart
 exports.createOrder = async (req, res) => {
   try {
     const userId = req.user?.id;
-    const guestToken = req.headers["x-guest-token"] || req.body.guest_token;
+    const providedGuestToken = req.body.guest_token;
+    const guestContext = extractGuestToken(req);
+    const guestToken =
+      guestContext?.rawToken ||
+      (providedGuestToken ? verifyGuestToken(providedGuestToken) : null);
     const {
       guest_email,
       shipping_address,
@@ -190,4 +195,3 @@ exports.updateOrderStatus = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-

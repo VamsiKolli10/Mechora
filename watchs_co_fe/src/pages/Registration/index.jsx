@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
-import axios from "axios";
 import {
   Grid,
   Paper,
@@ -12,7 +11,7 @@ import {
   Link,
   Snackbar,
 } from "@mui/material";
-import { API_BASE_URL } from "@/constants/env";
+import api from "@/utils/api";
 
 const Registration = () => {
   const navigate = useNavigate();
@@ -57,7 +56,7 @@ const Registration = () => {
     }
 
     try {
-      await axios.post(`${API_BASE_URL}/api/auth/signup`, {
+      await api.post(`/api/auth/signup`, {
         name: form.name,
         email: form.email,
         password: form.password,

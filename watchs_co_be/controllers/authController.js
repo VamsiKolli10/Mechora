@@ -1,4 +1,5 @@
 const bcrypt = require("bcrypt");
+const { authenticator } = require("otplib");
 const UserModel = require("../models/userModel");
 const {
   generateAccessToken,
@@ -6,11 +7,94 @@ const {
   verifyRefreshToken,
   generatePasswordResetToken,
   generateEmailVerificationToken,
+  hashToken,
 } = require("../utils/tokenUtils");
 const { query } = require("../db");
+const config = require("../config/secrets");
+const logger = require("../utils/logger");
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+
+authenticator.options = {
+  window: 1,
+};
+
+const commonCookieOptions = {
+  httpOnly: true,
+  sameSite: config.cookies.sameSite,
+  secure: config.cookies.secure,
+  path: "/",
+};
+
+if (config.cookies.domain) {
+  commonCookieOptions.domain = config.cookies.domain;
+}
+
+const buildCookieOptions = (maxAge) => ({
+  ...commonCookieOptions,
+  maxAge,
+});
+
+const setSessionCookies = (res, accessToken, refreshToken) => {
+  res.cookie(
+    config.cookies.access,
+    accessToken,
+    buildCookieOptions(config.cookies.accessMaxAgeMs)
+  );
+  res.cookie(
+    config.cookies.refresh,
+    refreshToken,
+    buildCookieOptions(config.cookies.refreshMaxAgeMs)
+  );
+};
+
+const clearSessionCookies = (res) => {
+  res.clearCookie(config.cookies.access, commonCookieOptions);
+  res.clearCookie(config.cookies.refresh, commonCookieOptions);
+};
+
+const buildUserPayload = (user) => ({
+  id: user.id,
+  email: user.email,
+  role: user.role || "customer",
+});
+
+const sanitizeUser = (user) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  email_verified: user.email_verified,
+  mfa_enabled: user.mfa_enabled,
+  role: user.role || "customer",
+});
+
+const sessionMetadata = () => ({
+  access_expires_in_ms: config.cookies.accessMaxAgeMs,
+  refresh_expires_in_ms: config.cookies.refreshMaxAgeMs,
+});
+
+const buildAndPersistTokens = async (user) => {
+  const payload = buildUserPayload(user);
+  const accessToken = generateAccessToken(payload);
+  const refreshToken = generateRefreshToken(payload);
+  const hashedRefresh = hashToken(refreshToken);
+
+  await query(
+    `UPDATE users 
+       SET refresh_token = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $2`,
+    [hashedRefresh, user.id]
+  );
+
+  return { accessToken, refreshToken };
+};
+
+const establishSession = async (user, res) => {
+  const { accessToken, refreshToken } = await buildAndPersistTokens(user);
+  setSessionCookies(res, accessToken, refreshToken);
+  return sanitizeUser(user);
+};
 
 const login = async (req, res) => {
   const { email, password, mfa_code } = req.body;
@@ -65,13 +149,10 @@ const login = async (req, res) => {
         });
       }
 
-      // TODO: Implement TOTP verification
-      // For now, we'll skip MFA verification
-      // const totp = require("totp-generator");
-      // const isValid = totp.verify(mfa_code, user.mfa_secret);
-      // if (!isValid) {
-      //   return res.status(401).json({ error: "Invalid MFA code" });
-      // }
+      const isValidCode = authenticator.check(mfa_code, user.mfa_secret);
+      if (!isValidCode) {
+        return res.status(401).json({ error: "Invalid MFA code" });
+      }
     }
 
     // Reset failed login attempts
@@ -82,32 +163,13 @@ const login = async (req, res) => {
       [user.id]
     );
 
-    // Generate tokens
-    const payload = { id: user.id, email: user.email };
-    const accessToken = generateAccessToken(payload);
-    const refreshToken = generateRefreshToken(payload);
-
-    // Store refresh token in database
-    await query(
-      `UPDATE users 
-       SET refresh_token = $1, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $2`,
-      [refreshToken, user.id]
-    );
-
+    const sessionUser = await establishSession(user, res);
     res.json({
-      token: accessToken,
-      refresh_token: refreshToken,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        email_verified: user.email_verified,
-        mfa_enabled: user.mfa_enabled,
-      },
+      user: sessionUser,
+      session: sessionMetadata(),
     });
   } catch (err) {
-    console.error("Login error:", err);
+    logger.error("Login error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -118,6 +180,7 @@ const signup = async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 12); // Increased rounds for better security
     const emailVerificationToken = generateEmailVerificationToken();
+    const hashedEmailVerificationToken = hashToken(emailVerificationToken);
 
     const result = await UserModel.createUser({
       name,
@@ -132,91 +195,70 @@ const signup = async (req, res) => {
       `UPDATE users 
        SET email_verification_token = $1, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $2`,
-      [emailVerificationToken, user.id]
-    );
-
-    // Generate tokens
-    const payload = { id: user.id, email: user.email };
-    const accessToken = generateAccessToken(payload);
-    const refreshToken = generateRefreshToken(payload);
-
-    // Store refresh token
-    await query(
-      `UPDATE users 
-       SET refresh_token = $1, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $2`,
-      [refreshToken, user.id]
+      [hashedEmailVerificationToken, user.id]
     );
 
     // TODO: Send email verification email
     // await sendEmailVerificationEmail(user.email, emailVerificationToken);
 
+    const sessionUser = await establishSession(user, res);
+
     res.status(201).json({
-      token: accessToken,
-      refresh_token: refreshToken,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        email_verified: false,
-        mfa_enabled: false,
-      },
+      user: sessionUser,
+      session: sessionMetadata(),
       message: "Account created successfully. Please verify your email.",
     });
   } catch (err) {
     if (err.code === "23505") {
       return res.status(400).json({ error: "Email already exists" });
     }
-    console.error("Signup error:", err);
+    logger.error("Signup error:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
 const refreshToken = async (req, res) => {
-  const { refresh_token } = req.body;
+  const cookieToken = req.cookies?.[config.cookies.refresh];
+  const bodyToken = req.body?.refresh_token;
+  const refreshTokenValue = cookieToken || bodyToken;
 
-  if (!refresh_token) {
+  if (!refreshTokenValue) {
     return res.status(400).json({ error: "Refresh token is required" });
   }
 
   try {
-    const decoded = verifyRefreshToken(refresh_token);
+    const decoded = verifyRefreshToken(refreshTokenValue);
 
     if (!decoded) {
       return res.status(401).json({ error: "Invalid refresh token" });
     }
 
-    // Verify token exists in database
-    const result = await query(
-      "SELECT * FROM users WHERE id = $1 AND refresh_token = $2",
-      [decoded.id, refresh_token]
-    );
+    const result = await query("SELECT * FROM users WHERE id = $1", [decoded.id]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: "Invalid refresh token" });
     }
 
     const user = result.rows[0];
+    const incomingHash = hashToken(refreshTokenValue);
 
-    // Generate new tokens
-    const payload = { id: user.id, email: user.email };
-    const newAccessToken = generateAccessToken(payload);
-    const newRefreshToken = generateRefreshToken(payload);
+    if (!user.refresh_token || user.refresh_token !== incomingHash) {
+      await query(
+        `UPDATE users SET refresh_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [decoded.id]
+      );
+      clearSessionCookies(res);
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
 
-    // Update refresh token in database
-    await query(
-      `UPDATE users 
-       SET refresh_token = $1, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $2`,
-      [newRefreshToken, user.id]
-    );
+    const sessionUser = await establishSession(user, res);
 
     res.json({
-      token: newAccessToken,
-      refresh_token: newRefreshToken,
+      user: sessionUser,
+      session: sessionMetadata(),
     });
   } catch (err) {
-    console.error("Refresh token error:", err);
+    logger.error("Refresh token error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -240,13 +282,14 @@ const requestPasswordReset = async (req, res) => {
     }
 
     const resetToken = generatePasswordResetToken();
+    const hashedResetToken = hashToken(resetToken);
     const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await query(
       `UPDATE users 
        SET password_reset_token = $1, password_reset_expires = $2, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $3`,
-      [resetToken, resetExpires, user.id]
+      [hashedResetToken, resetExpires, user.id]
     );
 
     // TODO: Send password reset email
@@ -256,7 +299,7 @@ const requestPasswordReset = async (req, res) => {
       message: "If the email exists, a password reset link has been sent",
     });
   } catch (err) {
-    console.error("Password reset request error:", err);
+    logger.error("Password reset request error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -269,11 +312,12 @@ const resetPassword = async (req, res) => {
   }
 
   try {
+    const hashedToken = hashToken(token);
     const result = await query(
       `SELECT * FROM users 
-       WHERE password_reset_token = $1 
-       AND password_reset_expires > NOW()`,
-      [token]
+       WHERE password_reset_expires > NOW()
+       AND (password_reset_token = $1 OR password_reset_token = $2)`,
+      [hashedToken, token]
     );
 
     if (result.rows.length === 0) {
@@ -297,7 +341,7 @@ const resetPassword = async (req, res) => {
 
     res.json({ message: "Password reset successfully" });
   } catch (err) {
-    console.error("Password reset error:", err);
+    logger.error("Password reset error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -310,10 +354,11 @@ const verifyEmail = async (req, res) => {
   }
 
   try {
+    const hashedToken = hashToken(token);
     const result = await query(
       `SELECT * FROM users 
-       WHERE email_verification_token = $1`,
-      [token]
+       WHERE email_verification_token = $1 OR email_verification_token = $2`,
+      [hashedToken, token]
     );
 
     if (result.rows.length === 0) {
@@ -337,7 +382,7 @@ const verifyEmail = async (req, res) => {
 
     res.json({ message: "Email verified successfully" });
   } catch (err) {
-    console.error("Email verification error:", err);
+    logger.error("Email verification error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -354,10 +399,11 @@ const logout = async (req, res) => {
         [userId]
       );
     } catch (err) {
-      console.error("Logout error:", err);
+      logger.error("Logout error:", err);
     }
   }
 
+  clearSessionCookies(res);
   res.json({ message: "Logged out successfully" });
 };
 

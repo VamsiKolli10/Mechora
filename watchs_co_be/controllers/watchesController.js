@@ -32,6 +32,7 @@ exports.getAllWatches = async (req, res) => {
     };
 
     const result = await Watch.findAll(options);
+    await Watch.ensureSlugs(result.watches);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -45,6 +46,8 @@ exports.getWatchById = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Watch not found" });
     }
+
+    await Watch.ensureSlugs(result.rows);
 
     // Get assets for this watch
     const assetsResult = await Asset.getAssetsByWatchId(id);
@@ -68,6 +71,7 @@ exports.getWatchBySlug = async (req, res) => {
     }
 
     const watch = result.rows[0];
+    await Watch.ensureSlugs([watch]);
 
     // Get assets for this watch
     const assetsResult = await Asset.getAssetsByWatchId(watch.id);
@@ -75,6 +79,7 @@ exports.getWatchBySlug = async (req, res) => {
 
     // Get recommended watches
     const recommendedResult = await Watch.getRecommendedWatches(watch.id, 6);
+    await Watch.ensureSlugs(recommendedResult.rows);
     watch.recommended = recommendedResult.rows;
 
     res.json(watch);
@@ -119,6 +124,7 @@ exports.searchWatches = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
 
     const result = await Watch.fullTextSearch(searchTerm, { page, limit });
+    await Watch.ensureSlugs(result.rows);
     res.json({
       watches: result.rows,
       pagination: {
@@ -136,6 +142,7 @@ exports.getFeaturedWatches = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     const result = await Watch.getFeaturedWatches(limit);
+    await Watch.ensureSlugs(result.rows);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -1,4 +1,4 @@
-import axios from "axios";
+import api from "@/utils/api";
 
 export const apiRequest = async ({
   method = "GET",
@@ -8,7 +8,7 @@ export const apiRequest = async ({
   params = {},
 }) => {
   try {
-    const response = await axios({
+    const response = await api.request({
       method,
       url,
       data,

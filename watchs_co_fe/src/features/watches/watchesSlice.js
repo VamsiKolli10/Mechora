@@ -1,15 +1,15 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import axios from "axios";
-import { API_BASE_URL } from "@/constants/env";
+import api from "@/utils/api";
+import { getErrorMessage } from "@/utils/errors";
 
 export const fetchWatches = createAsyncThunk(
   "watches/fetchWatches",
   async (params = {}, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/watches`, { params });
+      const { data } = await api.get(`/api/watches`, { params });
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch watches");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch watches"));
     }
   }
 );
@@ -18,10 +18,10 @@ export const fetchWatchBySlug = createAsyncThunk(
   "watches/fetchWatchBySlug",
   async (slug, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/watches/slug/${slug}`);
+      const { data } = await api.get(`/api/watches/slug/${slug}`);
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch watch");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch watch"));
     }
   }
 );
@@ -30,10 +30,10 @@ export const fetchWatchById = createAsyncThunk(
   "watches/fetchWatchById",
   async (id, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/watches/${id}`);
+      const { data } = await api.get(`/api/watches/${id}`);
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch watch");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch watch"));
     }
   }
 );
@@ -42,12 +42,12 @@ export const fetchFeaturedWatches = createAsyncThunk(
   "watches/fetchFeaturedWatches",
   async (limit = 10, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/watches/featured`, {
+      const { data } = await api.get(`/api/watches/featured`, {
         params: { limit },
       });
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch featured watches");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch featured watches"));
     }
   }
 );
@@ -56,12 +56,12 @@ export const searchWatches = createAsyncThunk(
   "watches/searchWatches",
   async ({ query, page = 1, limit = 20 }, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/search`, {
+      const { data } = await api.get(`/api/search`, {
         params: { q: query, page, limit },
       });
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Search failed");
+      return rejectWithValue(getErrorMessage(error, "Search failed"));
     }
   }
 );
@@ -73,12 +73,12 @@ export const getSearchSuggestions = createAsyncThunk(
       return [];
     }
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/search/suggestions`, {
+      const { data } = await api.get(`/api/search/suggestions`, {
         params: { q: query },
       });
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to get suggestions");
+      return rejectWithValue(getErrorMessage(error, "Failed to get suggestions"));
     }
   }
 );
@@ -87,10 +87,10 @@ export const fetchBrands = createAsyncThunk(
   "watches/fetchBrands",
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/brands`);
+      const { data } = await api.get(`/api/brands`);
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch brands");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch brands"));
     }
   }
 );
@@ -99,10 +99,10 @@ export const fetchCollections = createAsyncThunk(
   "watches/fetchCollections",
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/api/collections`);
+      const { data } = await api.get(`/api/collections`);
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch collections");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch collections"));
     }
   }
 );
@@ -206,4 +206,3 @@ export const { setFilters, clearFilters, clearSearchSuggestions, clearCurrentWat
   watchesSlice.actions;
 export const selectWatches = (state) => state.watches;
 export default watchesSlice.reducer;
-

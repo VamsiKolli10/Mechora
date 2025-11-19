@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { Box, Typography, Grid, Paper, Card, CardMedia, CardContent, CircularProgress } from "@mui/material";
 import { fetchFeaturedWatches } from "@/features/watches/watchesSlice";
+import { buildWatchDetailPath } from "@/utils/watchRoutes";
 
 const FeaturedWatches = () => {
   const dispatch = useDispatch();
@@ -42,7 +43,7 @@ const FeaturedWatches = () => {
           <Grid item xs={12} sm={6} md={4} key={watch.id}>
             <Card
               component={Link}
-              to={`/shop/${watch.slug}`}
+              to={buildWatchDetailPath(watch)}
               sx={{
                 textDecoration: "none",
                 height: "100%",

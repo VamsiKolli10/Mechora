@@ -4,7 +4,8 @@ const PaymentMethod = require("../models/paymentMethodModel");
 const Order = require("../models/orderModel");
 const { query } = require("../db");
 const bcrypt = require("bcrypt");
-const { passwordValidator } = require("../middleware/passwordValidator");
+const { authenticator } = require("otplib");
+const { validatePassword } = require("../middleware/passwordValidator");
 
 // Get user profile
 exports.getProfile = async (req, res) => {
@@ -72,7 +73,7 @@ exports.changePassword = async (req, res) => {
     }
 
     // Validate new password
-    const passwordErrors = require("../middleware/passwordValidator").validatePassword(new_password);
+    const passwordErrors = validatePassword(new_password);
     if (passwordErrors.length > 0) {
       return res.status(400).json({
         error: "Password validation failed",
@@ -269,3 +270,88 @@ exports.getOrderDetails = async (req, res) => {
   }
 };
 
+// MFA setup
+exports.initiateMfaSetup = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await UserModel.getUserById(userId);
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const secret = authenticator.generateSecret();
+    await query(
+      `UPDATE users SET mfa_secret = $1, mfa_enabled = false, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [secret, userId]
+    );
+
+    const otpauthUrl = authenticator.keyuri(user.email, "Mechora", secret);
+
+    res.json({
+      secret,
+      otpauth_url: otpauthUrl,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.enableMfa = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { code } = req.body;
+
+    const result = await UserModel.getUserById(userId);
+    const user = result.rows[0];
+
+    if (!user || !user.mfa_secret) {
+      return res.status(400).json({ error: "MFA setup not initialized" });
+    }
+
+    const isValid = authenticator.check(code, user.mfa_secret);
+    if (!isValid) {
+      return res.status(400).json({ error: "Invalid MFA code" });
+    }
+
+    await query(
+      `UPDATE users SET mfa_enabled = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [userId]
+    );
+
+    res.json({ message: "MFA enabled" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.disableMfa = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { code } = req.body;
+
+    const result = await UserModel.getUserById(userId);
+    const user = result.rows[0];
+
+    if (!user || !user.mfa_secret) {
+      return res.status(400).json({ error: "MFA not enabled" });
+    }
+
+    const isValid = authenticator.check(code, user.mfa_secret);
+    if (!isValid) {
+      return res.status(400).json({ error: "Invalid MFA code" });
+    }
+
+    await query(
+      `UPDATE users 
+         SET mfa_enabled = false, mfa_secret = NULL, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $1`,
+      [userId]
+    );
+
+    res.json({ message: "MFA disabled" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

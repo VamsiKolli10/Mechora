@@ -1,39 +1,60 @@
-const jwt = require("jsonwebtoken");
+const { verifyAccessToken } = require("../utils/tokenUtils");
+const config = require("../config/secrets");
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_dev_secret";
-
-const requireAuth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "No token provided" });
-  }
-
-  const token = authHeader.split(" ")[1];
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    console.error("JWT error:", err.message);
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-};
-
-// Optional auth - doesn't fail if no token, but sets req.user if valid token exists
-const optionalAuth = (req, res, next) => {
+const getTokenFromRequest = (req) => {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.split(" ")[1];
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = decoded;
-    } catch (err) {
-      // Invalid token, but continue without user
-      req.user = null;
-    }
+    return authHeader.split(" ")[1];
+  }
+  if (req.cookies?.[config.cookies.access]) {
+    return req.cookies[config.cookies.access];
+  }
+  return null;
+};
+
+const decodeToken = (token) => {
+  if (!token) return null;
+  return verifyAccessToken(token);
+};
+
+const requireAuth = (req, res, next) => {
+  const token = getTokenFromRequest(req);
+  if (!token) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  const decoded = decodeToken(token);
+  if (!decoded) {
+    return res.status(401).json({ error: "Invalid or expired session" });
+  }
+
+  req.user = decoded;
+  next();
+};
+
+const optionalAuth = (req, res, next) => {
+  const token = getTokenFromRequest(req);
+  const decoded = decodeToken(token);
+  req.user = decoded || null;
+  next();
+};
+
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({ error: "Insufficient permissions" });
   }
   next();
 };
 
-module.exports = { requireAuth, optional: optionalAuth };
+const requireAdmin = requireRole("admin");
+
+module.exports = {
+  requireAuth,
+  optionalAuth,
+  optional: optionalAuth,
+  requireRole,
+  requireAdmin,
+};

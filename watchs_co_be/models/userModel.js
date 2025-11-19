@@ -11,10 +11,10 @@ const getUserById = (id) => {
 };
 
 // CREATE user
-const createUser = ({ name, hashedPassword, email }) => {
+const createUser = ({ name, hashedPassword, email, role = "customer" }) => {
   return query(
-    "INSERT INTO users (name, password, email, branch_id) VALUES (LOWER(TRIM($1)), $2, LOWER(TRIM($3)), $4) RETURNING id, name, email",
-    [name, hashedPassword, email, 1]
+    "INSERT INTO users (name, password, email, branch_id, role) VALUES (LOWER(TRIM($1)), $2, LOWER(TRIM($3)), $4, $5) RETURNING id, name, email, role",
+    [name, hashedPassword, email, 1, role]
   );
 };
 
@@ -34,7 +34,7 @@ const updateUser = (id, updates) => {
   const setString = setParts.join(", ");
   const queryText = `UPDATE users SET ${setString}, updated_at = CURRENT_TIMESTAMP 
                      WHERE id = $${fields.length + 1} 
-                     RETURNING id, name, email, created_at, updated_at, email_verified, mfa_enabled`;
+                     RETURNING id, name, email, role, created_at, updated_at, email_verified, mfa_enabled`;
   return query(queryText, [...values, id]);
 };
 

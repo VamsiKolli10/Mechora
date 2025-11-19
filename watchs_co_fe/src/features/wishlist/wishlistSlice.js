@@ -1,25 +1,21 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import axios from "axios";
-import { API_BASE_URL } from "@/constants/env";
+import api from "@/utils/api";
+import { getErrorMessage } from "@/utils/errors";
 
-const getAuthHeaders = (getState) => {
-  const state = getState();
-  const token = state.auth?.token;
-  if (!token) {
-    throw new Error("Authentication required");
-  }
-  return { Authorization: `Bearer ${token}` };
-};
+const ensureAuthenticated = (getState) => getState().auth?.user;
 
 export const fetchWishlist = createAsyncThunk(
   "wishlist/fetchWishlist",
   async (_, { getState, rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      const { data } = await axios.get(`${API_BASE_URL}/api/wishlist`, { headers });
+      const user = ensureAuthenticated(getState);
+      if (!user) {
+        return [];
+      }
+      const { data } = await api.get("/api/wishlist");
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch wishlist");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch wishlist"));
     }
   }
 );
@@ -28,15 +24,14 @@ export const addToWishlist = createAsyncThunk(
   "wishlist/addToWishlist",
   async (watchId, { getState, rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      await axios.post(
-        `${API_BASE_URL}/api/wishlist/items`,
-        { watch_id: watchId },
-        { headers }
-      );
+      const user = ensureAuthenticated(getState);
+      if (!user) {
+        return rejectWithValue("Authentication required");
+      }
+      await api.post("/api/wishlist/items", { watch_id: watchId });
       return watchId;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to add to wishlist");
+      return rejectWithValue(getErrorMessage(error, "Failed to add to wishlist"));
     }
   }
 );
@@ -45,11 +40,14 @@ export const removeFromWishlist = createAsyncThunk(
   "wishlist/removeFromWishlist",
   async (watchId, { getState, rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      await axios.delete(`${API_BASE_URL}/api/wishlist/items/${watchId}`, { headers });
+      const user = ensureAuthenticated(getState);
+      if (!user) {
+        return rejectWithValue("Authentication required");
+      }
+      await api.delete(`/api/wishlist/items/${watchId}`);
       return watchId;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to remove from wishlist");
+      return rejectWithValue(getErrorMessage(error, "Failed to remove from wishlist"));
     }
   }
 );
@@ -58,14 +56,12 @@ export const checkWishlistStatus = createAsyncThunk(
   "wishlist/checkWishlistStatus",
   async (watchId, { getState, rejectWithValue }) => {
     try {
-      const state = getState();
-      const token = state.auth?.token;
-      if (!token) return { watchId, inWishlist: false };
-      
-      const { data } = await axios.get(
-        `${API_BASE_URL}/api/wishlist/items/${watchId}/check`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const user = ensureAuthenticated(getState);
+      if (!user) {
+        return { watchId, inWishlist: false };
+      }
+
+      const { data } = await api.get(`/api/wishlist/items/${watchId}/check`);
       return { watchId, inWishlist: data.in_wishlist };
     } catch (error) {
       return { watchId, inWishlist: false };
@@ -123,4 +119,3 @@ const wishlistSlice = createSlice({
 export const { clearWishlist } = wishlistSlice.actions;
 export const selectWishlist = (state) => state.wishlist;
 export default wishlistSlice.reducer;
-

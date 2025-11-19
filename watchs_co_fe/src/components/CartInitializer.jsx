@@ -5,18 +5,13 @@ import { fetchCart } from "@/features/cart/cartSlice";
 // Component to initialize cart on app load
 const CartInitializer = () => {
   const dispatch = useDispatch();
-  const { cart } = useSelector((state) => state.cart);
   const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    // Fetch cart when component mounts or when user changes
-    if (!cart) {
-      dispatch(fetchCart());
-    }
-  }, [dispatch, cart, user]);
+    dispatch(fetchCart());
+  }, [dispatch, user?.id]);
 
   return null; // This component doesn't render anything
 };
 
 export default CartInitializer;
-

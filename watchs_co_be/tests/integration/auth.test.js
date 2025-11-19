@@ -2,42 +2,54 @@ const request = require("supertest");
 const app = require("../../app");
 const { query } = require("../../db");
 
-// Test user data
 const testUser = {
   name: "Test User",
   email: "test@example.com",
   password: "TestPassword123!",
 };
 
-let authToken;
-let refreshToken;
+const secondaryUserEmail = "test2@example.com";
+
+const cookieNames = ["mechora_access_token", "mechora_refresh_token"];
+
+const expectSessionCookies = (res) => {
+  const cookies = res.headers["set-cookie"] || [];
+  cookieNames.forEach((name) => {
+    expect(cookies.some((cookie) => cookie.startsWith(`${name}=`))).toBe(true);
+  });
+};
+
+const authenticateAgent = async () => {
+  const agent = request.agent(app);
+  await agent
+    .post("/api/auth/login")
+    .send({ email: testUser.email, password: testUser.password })
+    .expect(200);
+  return agent;
+};
 
 beforeAll(async () => {
-  // Clean up test data
-  await query("DELETE FROM users WHERE email = $1", [testUser.email]);
+  await query("DELETE FROM users WHERE email IN ($1, $2)", [testUser.email, secondaryUserEmail]);
 });
 
 afterAll(async () => {
-  // Clean up test data
-  await query("DELETE FROM users WHERE email = $1", [testUser.email]);
+  await query("DELETE FROM users WHERE email IN ($1, $2)", [testUser.email, secondaryUserEmail]);
 });
 
 describe("Authentication API", () => {
   describe("POST /api/auth/signup", () => {
     test("should create a new user with valid data", async () => {
-      const response = await request(app)
+      const signupAgent = request.agent(app);
+      const response = await signupAgent
         .post("/api/auth/signup")
         .send(testUser)
         .expect(201);
 
-      expect(response.body).toHaveProperty("token");
-      expect(response.body).toHaveProperty("refresh_token");
       expect(response.body).toHaveProperty("user");
+      expect(response.body).toHaveProperty("session");
       expect(response.body.user.email).toBe(testUser.email.toLowerCase());
       expect(response.body.user.email_verified).toBe(false);
-
-      authToken = response.body.token;
-      refreshToken = response.body.refresh_token;
+      expectSessionCookies(response);
     });
 
     test("should reject signup with invalid password", async () => {
@@ -45,7 +57,7 @@ describe("Authentication API", () => {
         .post("/api/auth/signup")
         .send({
           name: "Test User 2",
-          email: "test2@example.com",
+          email: secondaryUserEmail,
           password: "weak",
         })
         .expect(400);
@@ -65,8 +77,9 @@ describe("Authentication API", () => {
   });
 
   describe("POST /api/auth/login", () => {
-    test("should login with valid credentials", async () => {
-      const response = await request(app)
+    test("should login with valid credentials and issue cookies", async () => {
+      const loginAgent = request.agent(app);
+      const response = await loginAgent
         .post("/api/auth/login")
         .send({
           email: testUser.email,
@@ -74,13 +87,9 @@ describe("Authentication API", () => {
         })
         .expect(200);
 
-      expect(response.body).toHaveProperty("token");
-      expect(response.body).toHaveProperty("refresh_token");
       expect(response.body).toHaveProperty("user");
       expect(response.body.user.email).toBe(testUser.email.toLowerCase());
-
-      authToken = response.body.token;
-      refreshToken = response.body.refresh_token;
+      expectSessionCookies(response);
     });
 
     test("should reject login with invalid credentials", async () => {
@@ -109,25 +118,19 @@ describe("Authentication API", () => {
   });
 
   describe("POST /api/auth/refresh", () => {
-    test("should refresh tokens with valid refresh token", async () => {
-      const response = await request(app)
-        .post("/api/auth/refresh")
-        .send({
-          refresh_token: refreshToken,
-        })
-        .expect(200);
+    test("should refresh session when cookies are valid", async () => {
+      const agent = await authenticateAgent();
+      const response = await agent.post("/api/auth/refresh").send({}).expect(200);
 
-      expect(response.body).toHaveProperty("token");
-      expect(response.body).toHaveProperty("refresh_token");
-      expect(response.body.token).not.toBe(authToken);
+      expect(response.body).toHaveProperty("user");
+      expect(response.body).toHaveProperty("session");
+      expectSessionCookies(response);
     });
 
-    test("should reject invalid refresh token", async () => {
+    test("should reject invalid refresh token payload", async () => {
       const response = await request(app)
         .post("/api/auth/refresh")
-        .send({
-          refresh_token: "invalid_token",
-        })
+        .send({ refresh_token: "invalid_token" })
         .expect(401);
 
       expect(response.body).toHaveProperty("error");
@@ -138,9 +141,7 @@ describe("Authentication API", () => {
     test("should accept password reset request", async () => {
       const response = await request(app)
         .post("/api/auth/password-reset/request")
-        .send({
-          email: testUser.email,
-        })
+        .send({ email: testUser.email })
         .expect(200);
 
       expect(response.body).toHaveProperty("message");
@@ -149,9 +150,7 @@ describe("Authentication API", () => {
     test("should not reveal if email exists", async () => {
       const response = await request(app)
         .post("/api/auth/password-reset/request")
-        .send({
-          email: "nonexistent@example.com",
-        })
+        .send({ email: "nonexistent@example.com" })
         .expect(200);
 
       expect(response.body).toHaveProperty("message");
@@ -159,22 +158,15 @@ describe("Authentication API", () => {
   });
 
   describe("POST /api/auth/logout", () => {
-    test("should logout successfully with valid token", async () => {
-      const response = await request(app)
-        .post("/api/auth/logout")
-        .set("Authorization", `Bearer ${authToken}`)
-        .expect(200);
-
+    test("should logout successfully with a session cookie", async () => {
+      const agent = await authenticateAgent();
+      const response = await agent.post("/api/auth/logout").expect(200);
       expect(response.body).toHaveProperty("message");
     });
 
-    test("should reject logout without token", async () => {
-      const response = await request(app)
-        .post("/api/auth/logout")
-        .expect(401);
-
+    test("should reject logout without authentication", async () => {
+      const response = await request(app).post("/api/auth/logout").expect(401);
       expect(response.body).toHaveProperty("error");
     });
   });
 });
-

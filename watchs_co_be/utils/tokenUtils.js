@@ -1,29 +1,25 @@
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-
-const JWT_SECRET = process.env.JWT_SECRET || "your_dev_secret";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "your_dev_refresh_secret";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
+const config = require("../config/secrets");
 
 // Generate access token
 const generateAccessToken = (payload) => {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+  return jwt.sign(payload, config.jwt.accessSecret, {
+    expiresIn: config.jwt.accessTtl,
   });
 };
 
 // Generate refresh token
 const generateRefreshToken = (payload) => {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, {
-    expiresIn: JWT_REFRESH_EXPIRES_IN,
+  return jwt.sign(payload, config.jwt.refreshSecret, {
+    expiresIn: config.jwt.refreshTtl,
   });
 };
 
 // Verify access token
 const verifyAccessToken = (token) => {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, config.jwt.accessSecret);
   } catch (err) {
     return null;
   }
@@ -32,7 +28,7 @@ const verifyAccessToken = (token) => {
 // Verify refresh token
 const verifyRefreshToken = (token) => {
   try {
-    return jwt.verify(token, JWT_REFRESH_SECRET);
+    return jwt.verify(token, config.jwt.refreshSecret);
   } catch (err) {
     return null;
   }
@@ -53,6 +49,9 @@ const generateEmailVerificationToken = () => {
   return generateRandomToken(32);
 };
 
+const hashToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
 module.exports = {
   generateAccessToken,
   generateRefreshToken,
@@ -61,5 +60,5 @@ module.exports = {
   generatePasswordResetToken,
   generateEmailVerificationToken,
   generateRandomToken,
+  hashToken,
 };
-

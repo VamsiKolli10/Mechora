@@ -1,104 +1,63 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import axios from "axios";
-import { API_BASE_URL } from "@/constants/env";
-
-const getGuestToken = () => {
-  if (typeof window === "undefined") return null;
-  let token = localStorage.getItem("guest_token");
-  if (!token) {
-    token = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem("guest_token", token);
-  }
-  return token;
-};
-
-const getAuthHeaders = (getState) => {
-  const state = getState();
-  const token = state.auth?.token;
-  const guestToken = getGuestToken();
-  const headers = {};
-  
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  } else if (guestToken) {
-    headers["x-guest-token"] = guestToken;
-  }
-  
-  return headers;
-};
+import api from "@/utils/api";
+import { getErrorMessage } from "@/utils/errors";
 
 export const fetchCart = createAsyncThunk(
   "cart/fetchCart",
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      const { data } = await axios.get(`${API_BASE_URL}/api/cart`, { headers });
+      const { data } = await api.get("/api/cart");
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to fetch cart");
+      return rejectWithValue(getErrorMessage(error, "Failed to fetch cart"));
     }
   }
 );
 
 export const addToCart = createAsyncThunk(
   "cart/addToCart",
-  async ({ watch_id, quantity = 1 }, { getState, rejectWithValue }) => {
+  async ({ watch_id, quantity = 1 }, { rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      const { data } = await axios.post(
-        `${API_BASE_URL}/api/cart/items`,
-        { watch_id, quantity },
-        { headers }
-      );
+      const { data } = await api.post("/api/cart/items", { watch_id, quantity });
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to add to cart");
+      return rejectWithValue(getErrorMessage(error, "Failed to add to cart"));
     }
   }
 );
 
 export const updateCartItem = createAsyncThunk(
   "cart/updateCartItem",
-  async ({ itemId, quantity }, { getState, rejectWithValue }) => {
+  async ({ itemId, quantity }, { rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      const { data } = await axios.put(
-        `${API_BASE_URL}/api/cart/items/${itemId}`,
-        { quantity },
-        { headers }
-      );
+      const { data } = await api.put(`/api/cart/items/${itemId}`, { quantity });
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to update cart item");
+      return rejectWithValue(getErrorMessage(error, "Failed to update cart item"));
     }
   }
 );
 
 export const removeFromCart = createAsyncThunk(
   "cart/removeFromCart",
-  async (itemId, { getState, rejectWithValue }) => {
+  async (itemId, { rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      const { data } = await axios.delete(
-        `${API_BASE_URL}/api/cart/items/${itemId}`,
-        { headers }
-      );
-      return { ...data, itemId };
+      const { data } = await api.delete(`/api/cart/items/${itemId}`);
+      return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to remove from cart");
+      return rejectWithValue(getErrorMessage(error, "Failed to remove from cart"));
     }
   }
 );
 
 export const clearCart = createAsyncThunk(
   "cart/clearCart",
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const headers = getAuthHeaders(getState);
-      await axios.delete(`${API_BASE_URL}/api/cart`, { headers });
+      await api.delete(`/api/cart`);
       return null;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to clear cart");
+      return rejectWithValue(getErrorMessage(error, "Failed to clear cart"));
     }
   }
 );
@@ -108,25 +67,14 @@ export const mergeCart = createAsyncThunk(
   async (_, { getState, rejectWithValue }) => {
     try {
       const state = getState();
-      const token = state.auth?.token;
-      const guestToken = getGuestToken();
-      
-      if (!token || !guestToken) {
+      if (!state.auth?.user) {
         return rejectWithValue("Authentication required");
       }
-      
-      const { data } = await axios.post(
-        `${API_BASE_URL}/api/cart/merge`,
-        { guest_token: guestToken },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Clear guest token after merge
-      localStorage.removeItem("guest_token");
-      
+
+      const { data } = await api.post("/api/cart/merge");
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || "Failed to merge cart");
+      return rejectWithValue(getErrorMessage(error, "Failed to merge cart"));
     }
   }
 );
@@ -213,4 +161,3 @@ const cartSlice = createSlice({
 export const { clearCartState } = cartSlice.actions;
 export const selectCart = (state) => state.cart;
 export default cartSlice.reducer;
-

@@ -23,6 +23,7 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { loginUser, selectAuth } from "@/features/auth/authSlice";
+import { getErrorMessage } from "@/utils/errors";
 import FloatingThemeToggle from "@/components/FloatingThemeToggle";
 
 const highlights = [
@@ -170,7 +171,7 @@ const Login = () => {
 
               {(error || authError) && (
                 <Alert severity="error" sx={{ mb: 3 }}>
-                  {error || authError}
+                  {getErrorMessage({ error: error || authError }, "Unable to sign in")}
                 </Alert>
               )}
 
