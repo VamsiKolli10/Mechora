@@ -4,6 +4,7 @@ node_modules/
 # Environment
 .env
 .env.*
+!.env.example
 
 # Logs and runtime
 npm-debug.log*
@@ -15,3 +16,6 @@ logs/
 # Build artifacts
 dist/
 coverage/
+
+# Email outbox (dev delivery)
+outbox/

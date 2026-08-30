@@ -9,14 +9,18 @@
     "test:unit": "jest --testPathPattern=unit",
     "test:integration": "jest --testPathPattern=integration",
     "migrate": "db-migrate up --env dev --config database.json",
+    "migrate:supabase": "db-migrate up --env supabase --config database.json --migrations-dir migrations_supabase",
+    "migrate:supabase:check": "db-migrate up --check --env supabase --config database.json --migrations-dir migrations_supabase",
     "rollback": "db-migrate down --env dev --config database.json",
     "maintenance": "node scripts/maintenance.js",
-    "dev": "nodemon"
+    "dev": "nodemon",
+    "start": "node server.js",
+    "email:test": "node scripts/sendTestEmail.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "db-migrate": "^0.11.14",
@@ -31,6 +35,8 @@
     "nodemon": "^3.1.11",
     "otplib": "^12.0.1",
     "pg": "^8.15.6",
+    "stripe": "^14.0.0",
+    "winston": "^3.19.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

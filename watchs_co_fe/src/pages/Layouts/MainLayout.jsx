@@ -29,8 +29,12 @@ import ThemeToggle from "@/components/ThemeToggle";
 import MiniCart from "@/components/MiniCart";
 
 const navItems = [
-  { label: "Collections", path: "/#collections" },
-  { label: "Marketplace", path: "/#marketplace" },
+  { label: "Shop all", path: "/shop" },
+  {
+    label: "New arrivals",
+    path: "/shop?sort_by=created_at&sort_order=DESC",
+  },
+  { label: "Available now", path: "/shop?stock_status=in_stock" },
   { label: "Concierge", path: "/#concierge" },
 ];
 
@@ -105,7 +109,19 @@ const MainLayout = () => {
       return location.pathname === "/" && !location.hash;
     }
 
-    return location.pathname === path;
+    if (path.includes("?")) {
+      const [pathname, query] = path.split("?");
+      const expected = new URLSearchParams(query);
+      const current = new URLSearchParams(location.search);
+      return (
+        location.pathname === pathname &&
+        [...expected.entries()].every(
+          ([key, value]) => current.get(key) === value
+        )
+      );
+    }
+
+    return location.pathname === path && !location.search;
   };
 
   const handleNavClick = (path, onItemClick) => {
@@ -129,7 +145,8 @@ const MainLayout = () => {
     } else {
       // No hash, navigate normally (Collections link)
       const targetPath = path || "/";
-      if (location.pathname !== targetPath) {
+      const currentPath = `${location.pathname}${location.search}`;
+      if (currentPath !== targetPath) {
         // Navigate to the path and remove any hash
         navigate(targetPath);
         // Scroll to top for Collections after navigation
@@ -199,6 +216,19 @@ const MainLayout = () => {
         background: theme.palette.background.default,
       }}
     >
+      <Box
+        sx={{
+          py: 0.9,
+          px: 2,
+          textAlign: "center",
+          bgcolor: "text.primary",
+          color: "background.default",
+        }}
+      >
+        <Typography variant="caption" fontWeight={700}>
+          Complimentary insured shipping on orders over $5,000 · 7-day returns
+        </Typography>
+      </Box>
       <AppBar
         position="sticky"
         elevation={0}
@@ -251,11 +281,11 @@ const MainLayout = () => {
                   display: { xs: "none", md: "inline-flex" },
                   mr: 1,
                   backgroundImage:
-                    "linear-gradient(120deg, #7c3aed, #4f46e5)",
+                    "linear-gradient(120deg, #282722, #4b463d)",
                   color: "#fff",
                   "&:hover": {
                     backgroundImage:
-                      "linear-gradient(120deg, #8b5cf6, #6366f1)",
+                      "linear-gradient(120deg, #3b3932, #675f52)",
                     transform: "translateY(-1px)",
                   },
                 }}
@@ -292,6 +322,7 @@ const MainLayout = () => {
                     variant="outlined"
                     size="small"
                     sx={{
+                      display: { xs: "none", md: "inline-flex" },
                       transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                       "&:hover": {
                         transform: "translateY(-1px)",
@@ -307,6 +338,7 @@ const MainLayout = () => {
                     variant="contained"
                     size="small"
                     sx={{
+                      display: { xs: "none", md: "inline-flex" },
                       transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                       "&:hover": {
                         transform: "translateY(-1px)",
@@ -325,6 +357,7 @@ const MainLayout = () => {
                     variant="text"
                     size="small"
                     sx={{
+                      display: { xs: "none", md: "inline-flex" },
                       color: theme.palette.text.primary,
                       "&:hover": {
                         backgroundColor: alpha(
@@ -341,6 +374,7 @@ const MainLayout = () => {
                     variant="text"
                     size="small"
                     sx={{
+                      display: { xs: "none", md: "inline-flex" },
                       color: theme.palette.text.primary,
                       "&:hover": {
                         backgroundColor: alpha(
@@ -443,6 +477,74 @@ const MainLayout = () => {
       >
         <Outlet />
       </Container>
+      <Box
+        component="footer"
+        sx={{
+          mt: 8,
+          borderTop: `1px solid ${theme.palette.divider}`,
+          bgcolor: alpha(theme.palette.background.paper, 0.65),
+        }}
+      >
+        <Container maxWidth="xl" sx={{ py: { xs: 5, md: 7 } }}>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 4,
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "2fr 1fr 1fr 1fr",
+              },
+            }}
+          >
+            <Box>
+              <Typography variant="h5" fontWeight={700}>
+                Mechora
+              </Typography>
+              <Typography color="text.secondary" sx={{ mt: 1.5, maxWidth: 340 }}>
+                Authenticated watches, transparent pricing, and insured delivery
+                for collectors everywhere.
+              </Typography>
+            </Box>
+            <Stack spacing={1.25}>
+              <Typography fontWeight={700}>Shop</Typography>
+              <Button component={RouterLink} to="/shop" sx={{ justifyContent: "flex-start", px: 0 }}>
+                All watches
+              </Button>
+              <Button
+                component={RouterLink}
+                to="/shop?sort_by=created_at&sort_order=DESC"
+                sx={{ justifyContent: "flex-start", px: 0 }}
+              >
+                New arrivals
+              </Button>
+            </Stack>
+            <Stack spacing={1.25}>
+              <Typography fontWeight={700}>Account</Typography>
+              <Button component={RouterLink} to="/account" sx={{ justifyContent: "flex-start", px: 0 }}>
+                My account
+              </Button>
+              <Button component={RouterLink} to="/cart" sx={{ justifyContent: "flex-start", px: 0 }}>
+                Cart
+              </Button>
+            </Stack>
+            <Stack spacing={1.25}>
+              <Typography fontWeight={700}>Service</Typography>
+              <Button component={RouterLink} to="/#concierge" sx={{ justifyContent: "flex-start", px: 0 }}>
+                Concierge
+              </Button>
+              <Typography variant="body2" color="text.secondary">
+                Secure payments
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Insured delivery
+              </Typography>
+            </Stack>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 5 }}>
+            © {new Date().getFullYear()} Mechora. Built for watch collectors.
+          </Typography>
+        </Container>
+      </Box>
     </Box>
   );
 };

@@ -56,6 +56,26 @@ const ensureAllSlugs = async () => {
   return processed;
 };
 
+const productAssetsJoin = `
+  LEFT JOIN LATERAL (
+    SELECT COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', a.id,
+          'url', a.url,
+          'type', a.type,
+          'alt_text', a.alt_text,
+          'sort_order', a.sort_order
+        )
+        ORDER BY a.sort_order ASC, a.created_at ASC
+      ),
+      '[]'::jsonb
+    ) AS assets
+    FROM assets a
+    WHERE a.watch_id = w.id
+  ) media ON true
+`;
+
 // CREATE watch
 const insertWatch = async (data) => {
   const {
@@ -119,7 +139,11 @@ const findAll = async (options = {}) => {
     page = 1,
     limit = 20,
     brand_id,
+    brand_name,
+    brand_slug,
     collection_id,
+    collection_name,
+    collection_slug,
     min_price,
     max_price,
     stock_status,
@@ -142,16 +166,54 @@ const findAll = async (options = {}) => {
     params.push(is_active);
   }
 
+  const brandConditions = [];
+
   if (brand_id) {
     paramCount++;
-    conditions.push(`w.brand_id = $${paramCount}`);
+    brandConditions.push(`w.brand_id = $${paramCount}`);
     params.push(brand_id);
   }
 
+  if (brand_slug) {
+    paramCount++;
+    brandConditions.push(`LOWER(b.slug) = LOWER($${paramCount})`);
+    params.push(brand_slug);
+  }
+
+  if (brand_name) {
+    paramCount++;
+    brandConditions.push(
+      `(LOWER(b.name) = LOWER($${paramCount}) OR LOWER(w.brand) = LOWER($${paramCount}))`
+    );
+    params.push(brand_name);
+  }
+
+  if (brandConditions.length > 0) {
+    conditions.push(`(${brandConditions.join(" OR ")})`);
+  }
+
+  const collectionConditions = [];
+
   if (collection_id) {
     paramCount++;
-    conditions.push(`w.collection_id = $${paramCount}`);
+    collectionConditions.push(`w.collection_id = $${paramCount}`);
     params.push(collection_id);
+  }
+
+  if (collection_slug) {
+    paramCount++;
+    collectionConditions.push(`LOWER(c.slug) = LOWER($${paramCount})`);
+    params.push(collection_slug);
+  }
+
+  if (collection_name) {
+    paramCount++;
+    collectionConditions.push(`LOWER(c.name) = LOWER($${paramCount})`);
+    params.push(collection_name);
+  }
+
+  if (collectionConditions.length > 0) {
+    conditions.push(`(${collectionConditions.join(" OR ")})`);
   }
 
   if (min_price !== undefined) {
@@ -168,7 +230,7 @@ const findAll = async (options = {}) => {
 
   if (stock_status) {
     paramCount++;
-    conditions.push(`w.stock_status = $${paramCount}`);
+    conditions.push(`LOWER(w.stock_status) = LOWER($${paramCount})`);
     params.push(stock_status);
   }
 
@@ -218,10 +280,12 @@ const findAll = async (options = {}) => {
       b.name as brand_name,
       b.slug as brand_slug,
       c.name as collection_name,
-      c.slug as collection_slug
+      c.slug as collection_slug,
+      media.assets
     FROM watches w
     LEFT JOIN brands b ON w.brand_id = b.id
     LEFT JOIN collections c ON w.collection_id = c.id
+    ${productAssetsJoin}
     ${whereClause}
     ORDER BY w.${safeSortBy} ${safeSortOrder}
     LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
@@ -233,6 +297,8 @@ const findAll = async (options = {}) => {
   const countSql = `
     SELECT COUNT(*) as total
     FROM watches w
+    LEFT JOIN brands b ON w.brand_id = b.id
+    LEFT JOIN collections c ON w.collection_id = c.id
     ${whereClause}
   `;
   const countParams = params.slice(0, -2); // Remove limit and offset
@@ -320,6 +386,7 @@ const fullTextSearch = (searchTerm, options = {}) => {
       b.slug as brand_slug,
       c.name as collection_name,
       c.slug as collection_slug,
+      media.assets,
       ts_rank(
         to_tsvector('english', 
           COALESCE(w.brand, '') || ' ' || 
@@ -333,6 +400,7 @@ const fullTextSearch = (searchTerm, options = {}) => {
     FROM watches w
     LEFT JOIN brands b ON w.brand_id = b.id
     LEFT JOIN collections c ON w.collection_id = c.id
+    ${productAssetsJoin}
     WHERE w.deleted_at IS NULL
       AND w.is_active = true
       AND (
@@ -356,15 +424,17 @@ const fullTextSearch = (searchTerm, options = {}) => {
 // Get search suggestions/autocomplete
 const getSearchSuggestions = (searchTerm, limit = 10) => {
   return query(
-    `SELECT DISTINCT
+    `SELECT
       w.id,
       w.brand,
       w.model,
       w.reference,
       w.slug,
-      b.name as brand_name
+      b.name as brand_name,
+      media.assets
     FROM watches w
     LEFT JOIN brands b ON w.brand_id = b.id
+    ${productAssetsJoin}
     WHERE w.deleted_at IS NULL
       AND w.is_active = true
       AND (
@@ -391,10 +461,12 @@ const getFeaturedWatches = (limit = 10) => {
       b.name as brand_name,
       b.slug as brand_slug,
       c.name as collection_name,
-      c.slug as collection_slug
+      c.slug as collection_slug,
+      media.assets
     FROM watches w
     LEFT JOIN brands b ON w.brand_id = b.id
     LEFT JOIN collections c ON w.collection_id = c.id
+    ${productAssetsJoin}
     WHERE w.deleted_at IS NULL
       AND w.is_active = true
       AND w.is_featured = true
@@ -410,9 +482,11 @@ const getRecommendedWatches = (watchId, limit = 6) => {
     `SELECT 
       w.*,
       b.name as brand_name,
-      b.slug as brand_slug
+      b.slug as brand_slug,
+      media.assets
     FROM watches w
     LEFT JOIN brands b ON w.brand_id = b.id
+    ${productAssetsJoin}
     WHERE w.deleted_at IS NULL
       AND w.is_active = true
       AND w.id != $1

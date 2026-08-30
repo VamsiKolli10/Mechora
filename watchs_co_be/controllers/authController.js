@@ -1,4 +1,5 @@
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const { authenticator } = require("otplib");
 const UserModel = require("../models/userModel");
 const {
@@ -12,6 +13,10 @@ const {
 const { query } = require("../db");
 const config = require("../config/secrets");
 const logger = require("../utils/logger");
+const {
+  sendEmailVerificationEmail,
+  sendPasswordResetEmail,
+} = require("../utils/mailer");
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
@@ -198,8 +203,11 @@ const signup = async (req, res) => {
       [hashedEmailVerificationToken, user.id]
     );
 
-    // TODO: Send email verification email
-    // await sendEmailVerificationEmail(user.email, emailVerificationToken);
+    try {
+      await sendEmailVerificationEmail(user.email, emailVerificationToken);
+    } catch (emailErr) {
+      logger.error("Email verification send failed:", emailErr.message);
+    }
 
     const sessionUser = await establishSession(user, res);
 
@@ -292,8 +300,11 @@ const requestPasswordReset = async (req, res) => {
       [hashedResetToken, resetExpires, user.id]
     );
 
-    // TODO: Send password reset email
-    // await sendPasswordResetEmail(user.email, resetToken);
+    try {
+      await sendPasswordResetEmail(user.email, resetToken);
+    } catch (emailErr) {
+      logger.error("Password reset email send failed:", emailErr.message);
+    }
 
     res.json({
       message: "If the email exists, a password reset link has been sent",
@@ -407,6 +418,76 @@ const logout = async (req, res) => {
   res.json({ message: "Logged out successfully" });
 };
 
+// Exchange a verified Supabase Auth session for the app's existing HttpOnly cookies.
+// This lets the rest of the API continue using its established session contract.
+const supabaseSession = async (req, res) => {
+  const accessToken = req.body?.access_token;
+  if (!accessToken) return res.status(400).json({ error: "Supabase access token is required" });
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) return res.status(503).json({ error: "Supabase Auth is not configured" });
+
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return res.status(401).json({ error: "Invalid Supabase session" });
+    const supabaseUser = await response.json();
+    const email = supabaseUser.email?.toLowerCase();
+    if (!email) return res.status(401).json({ error: "Supabase session has no email" });
+
+    const supabaseUserId = supabaseUser.id;
+    const emailVerified = Boolean(supabaseUser.email_confirmed_at);
+    let result = await UserModel.findUserBySupabaseId(supabaseUserId);
+    let user = result.rows[0];
+
+    if (!user) {
+      result = await UserModel.findUserByEmail(email);
+      user = result.rows[0];
+
+      if (user?.supabase_user_id && user.supabase_user_id !== supabaseUserId) {
+        return res.status(409).json({ error: "Email is linked to another identity" });
+      }
+
+      if (user) {
+        result = await UserModel.linkSupabaseIdentity(
+          user.id,
+          supabaseUserId,
+          emailVerified
+        );
+        user = result.rows[0];
+      } else {
+        const name = supabaseUser.user_metadata?.name || email.split("@")[0];
+        const hashedPassword = await bcrypt.hash(
+          crypto.randomBytes(32).toString("hex"),
+          12
+        );
+        result = await UserModel.createUser({
+          name,
+          hashedPassword,
+          email,
+          supabaseUserId,
+          emailVerified,
+        });
+        user = result.rows[0];
+      }
+    } else if (user.email_verified !== emailVerified) {
+      result = await UserModel.linkSupabaseIdentity(
+        user.id,
+        supabaseUserId,
+        emailVerified
+      );
+      user = result.rows[0];
+    }
+
+    const sessionUser = await establishSession(user, res);
+    return res.json({ user: sessionUser, session: sessionMetadata() });
+  } catch (err) {
+    logger.error("Supabase session exchange error", { message: err.message });
+    return res.status(500).json({ error: "Unable to establish session" });
+  }
+};
+
 module.exports = {
   login,
   signup,
@@ -415,4 +496,5 @@ module.exports = {
   resetPassword,
   verifyEmail,
   logout,
+  supabaseSession,
 };

@@ -65,27 +65,24 @@ const highlightPieces = [
 
 const statHighlights = [
   {
-    value: "$218M",
-    label: "12 mo GMV",
-    helper: "Transactions settled through Mechora",
-    trend: "+18% vs LY",
+    value: "Curated",
+    label: "Focused selection",
+    helper: "A considered catalogue instead of endless listings",
   },
   {
-    value: "2.4k",
-    label: "References live",
-    helper: "Curated weekly from maisons & independents",
-    trend: "+94 this week",
+    value: "Insured",
+    label: "Delivery",
+    helper: "Tracked shipping from checkout to your door",
   },
   {
-    value: "72h",
-    label: "Avg delivery",
-    helper: "Bonded couriers, insured tracking",
+    value: "Clear",
+    label: "Watch details",
+    helper: "Condition, reference and specifications in one place",
   },
   {
-    value: "4.9/5",
-    label: "Collector rating",
-    helper: "Concierge satisfaction across 6k reviews",
-    trend: "6k reviews",
+    value: "Personal",
+    label: "Sourcing support",
+    helper: "A direct path for harder-to-find references",
   },
 ];
 
@@ -328,8 +325,8 @@ const Home = () => {
     () =>
       theme.customComponents?.gradients?.hero ||
       (theme.palette.mode === "dark"
-        ? "linear-gradient(135deg, rgba(15,23,42,.95), rgba(30,41,88,.8))"
-        : "linear-gradient(135deg, #fefce8, #eef2ff)"),
+        ? "linear-gradient(135deg, #29251f, #111214)"
+        : "linear-gradient(135deg, #ece4d5, #f9f7f1)"),
     [theme]
   );
 
@@ -374,7 +371,7 @@ const Home = () => {
         elevation={0}
         sx={{
           p: { xs: 3, md: 5 },
-          borderRadius: 2,
+          borderRadius: { xs: 3, md: 5 },
           position: "relative",
           overflow: "hidden",
           background: heroBackground,
@@ -408,14 +405,15 @@ const Home = () => {
         >
           <Grid item xs={12} md={7}>
             <Stack spacing={3} sx={{ mt: { xs: 4, md: 6 } }}>
-              <Chip label="Certified watch marketplace" color="secondary" />
-              <Typography variant="h2" sx={{ fontSize: { xs: 40, md: 56 } }}>
-                Shop grail watches with concierge-level trust
+              <Typography variant="overline" color="secondary.main">
+                Curated mechanical watches
               </Typography>
-              <Typography variant="h6" color="text.secondary">
-                Access retail allocations, rare independents, and insured
-                servicing from one dashboard. Every piece is authenticated by
-                Swiss-trained technicians.
+              <Typography variant="h1" sx={{ fontSize: { xs: 48, md: 76 }, maxWidth: 780 }}>
+                Timepieces with a story worth continuing.
+              </Typography>
+              <Typography color="text.secondary" sx={{ fontSize: { xs: 17, md: 19 }, lineHeight: 1.7, maxWidth: 680 }}>
+                Discover exceptional references from iconic maisons and independent
+                makers. Every watch is carefully reviewed before delivery.
               </Typography>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                 <Button
@@ -423,12 +421,12 @@ const Home = () => {
                   size="large"
                   endIcon={<ArrowForwardIcon />}
                   component={RouterLink}
-                  to="/#marketplace"
+                  to="/shop"
                   sx={{
                     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                     "&:hover": {
                       transform: "translateY(-2px)",
-                      boxShadow: "0 8px 24px rgba(124, 58, 237, 0.4)",
+                      boxShadow: "0 12px 28px rgba(40, 34, 25, 0.18)",
                       "& .MuiSvgIcon-root": {
                         transform: "translateX(4px)",
                       },
@@ -438,7 +436,7 @@ const Home = () => {
                     },
                   }}
                 >
-                  Browse marketplace
+                  Explore watches
                 </Button>
                 <Button
                   variant="outlined"
@@ -453,7 +451,7 @@ const Home = () => {
                     },
                   }}
                 >
-                  Book a live tour
+                  Meet your concierge
                 </Button>
               </Stack>
               <Stack
@@ -476,10 +474,10 @@ const Home = () => {
                 </Stack>
                 <Box>
                   <Typography fontWeight={600}>
-                    6,200+ concierge collectors
+                    Guidance from first look to delivery
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Escrow protected & insured by Lloyd's of London
+                    Expert authentication · insured delivery
                   </Typography>
                 </Box>
               </Stack>
@@ -530,6 +528,26 @@ const Home = () => {
 
           <Grid item xs={12} md={5}>
             <Stack spacing={3}>
+              <Box
+                sx={{
+                  position: "relative",
+                  overflow: "hidden",
+                  borderRadius: 4,
+                  bgcolor: "background.accent",
+                  minHeight: { xs: 360, md: 520 },
+                }}
+              >
+                <Box
+                  component="img"
+                  src="/images/hero1.png"
+                  alt="Mechanical watch selected by Mechora"
+                  sx={{ width: "100%", height: "100%", minHeight: { xs: 360, md: 520 }, objectFit: "cover", display: "block" }}
+                />
+                <Box sx={{ position: "absolute", left: 18, right: 18, bottom: 18, p: 2, ...glassPanel, borderRadius: 2.5 }}>
+                  <Typography variant="overline" color="secondary.main">Editor’s selection</Typography>
+                  <Typography variant="h6" sx={{ fontFamily: "Georgia, serif" }}>A modern icon, chosen for the long term</Typography>
+                </Box>
+              </Box>
               <Box sx={{ p: 3, ...glassPanel, borderRadius: 2 }}>
                 <Stack
                   direction="row"
@@ -967,7 +985,7 @@ const Home = () => {
           background:
             theme.palette.mode === "dark"
               ? "linear-gradient(120deg, rgba(88,28,135,.7), rgba(37,99,235,.5))"
-              : "linear-gradient(120deg, #ede9fe, #dbeafe)",
+              : "linear-gradient(120deg, #ece4d5, #f7f4ed)",
         }}
       >
         <Typography variant="overline" color="text.secondary">

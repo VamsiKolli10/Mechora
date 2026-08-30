@@ -1,22 +1,12 @@
 import { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import {
-  fetchCurrentUser,
-  logoutUser,
-  selectAuth,
-} from "@/features/auth/authSlice";
+import { logoutUser, selectAuth } from "@/features/auth/authSlice";
 
 const useAuth = ({ redirectTo = null, protectedOnly = false } = {}) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user, status, error } = useSelector(selectAuth);
-
-  useEffect(() => {
-    if (status === "idle") {
-      dispatch(fetchCurrentUser());
-    }
-  }, [dispatch, status]);
 
   useEffect(() => {
     if (

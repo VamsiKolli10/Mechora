@@ -1,12 +1,12 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import api from "@/utils/api";
+import { authApi } from "@/services/authApi";
 import { getErrorMessage } from "@/utils/errors";
 
 export const fetchCurrentUser = createAsyncThunk(
   "auth/fetchCurrentUser",
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/users/me`);
+      const { data } = await authApi.getCurrentUser();
       return { user: data.user || data };
     } catch (error) {
       if (error.response?.status === 401) {
@@ -21,7 +21,7 @@ export const loginUser = createAsyncThunk(
   "auth/loginUser",
   async (credentials, { rejectWithValue }) => {
     try {
-      const { data } = await api.post(`/api/auth/login`, credentials);
+      const { data } = await authApi.login(credentials);
 
       if (data.requires_mfa) {
         return rejectWithValue({ requires_mfa: true, message: data.message });
@@ -40,8 +40,13 @@ export const signupUser = createAsyncThunk(
   "auth/signupUser",
   async (userData, { rejectWithValue }) => {
     try {
-      const { data } = await api.post(`/api/auth/signup`, userData);
-      return { user: data.user, session: data.session, message: data.message };
+      const { data } = await authApi.signup(userData);
+      return {
+        user: data.user,
+        session: data.session,
+        message: data.message,
+        pendingConfirmation: Boolean(data.pending_confirmation),
+      };
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Something went wrong. Try again.")
@@ -54,7 +59,7 @@ export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async () => {
     try {
-      await api.post(`/api/auth/logout`);
+      await authApi.logout();
     } catch (error) {
       // best effort logout; swallow error to allow UI to proceed
       console.error("Logout error:", error);

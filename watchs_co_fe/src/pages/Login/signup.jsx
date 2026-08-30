@@ -94,7 +94,7 @@ const Registration = () => {
     }
 
     try {
-      await dispatch(signupUser({
+      const result = await dispatch(signupUser({
         name: form.name,
         email: form.email,
         password: form.password,
@@ -102,11 +102,16 @@ const Registration = () => {
 
       setSnackbar({
         open: true,
-        message: "Signup successful! Redirecting...",
+        message: result.pendingConfirmation
+          ? result.message
+          : "Signup successful! Redirecting...",
         severity: "success",
       });
 
-      setTimeout(() => navigate("/"), 2000);
+      setTimeout(
+        () => navigate(result.pendingConfirmation ? "/login" : "/account"),
+        result.pendingConfirmation ? 4000 : 2000
+      );
     } catch (error) {
       const message = error || "Signup failed. Please try again.";
       setSnackbar({ open: true, message, severity: "error" });
@@ -146,8 +151,8 @@ const Registration = () => {
                 p: { xs: 4, md: 5 },
                 background:
                   theme.palette.mode === "dark"
-                    ? "linear-gradient(145deg, rgba(15,23,42,.95), rgba(49,46,129,.8))"
-                    : "linear-gradient(145deg, #eef2ff, #fff7ed)",
+                    ? "linear-gradient(145deg, #202125, #111214)"
+                    : "linear-gradient(145deg, #ebe3d5, #faf7f0)",
                 color: theme.palette.mode === "dark" ? "#f8fafc" : theme.palette.text.primary,
                 position: "relative",
                 overflow: "hidden",

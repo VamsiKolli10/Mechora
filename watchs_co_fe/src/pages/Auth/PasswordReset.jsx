@@ -13,10 +13,12 @@ import {
 } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 import api from "@/utils/api";
+import { isSupabaseAuthConfigured, supabase } from "@/services/supabaseClient";
 
 const PasswordReset = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const isResetMode = Boolean(token || searchParams.get("mode") === "reset");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -31,10 +33,18 @@ const PasswordReset = () => {
     setSuccess("");
 
     try {
-      await api.post("/api/auth/password-reset/request", { email });
+      if (isSupabaseAuthConfigured) {
+        await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/password-reset?mode=reset`,
+        }).then(({ error }) => {
+          if (error) throw error;
+        });
+      } else {
+        await api.post("/api/auth/password-reset/request", { email });
+      }
       setSuccess("If the email exists, a password reset link has been sent.");
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to send reset email");
+      setError(err.response?.data?.error || err.message || "Failed to send reset email");
     } finally {
       setLoading(false);
     }
@@ -60,10 +70,17 @@ const PasswordReset = () => {
     }
 
     try {
-      await api.post("/api/auth/password-reset", { token, password });
+      if (isSupabaseAuthConfigured) {
+        await supabase.auth.updateUser({ password }).then(({ error }) => {
+          if (error) throw error;
+        });
+        await supabase.auth.signOut();
+      } else {
+        await api.post("/api/auth/password-reset", { token, password });
+      }
       setSuccess("Password reset successfully. You can now login with your new password.");
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to reset password");
+      setError(err.response?.data?.error || err.message || "Failed to reset password");
     } finally {
       setLoading(false);
     }
@@ -81,7 +98,7 @@ const PasswordReset = () => {
           Back to Login
         </Button>
 
-        {token ? (
+        {isResetMode ? (
           <>
             <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>
               Reset Your Password
@@ -181,4 +198,3 @@ const PasswordReset = () => {
 };
 
 export default PasswordReset;
-

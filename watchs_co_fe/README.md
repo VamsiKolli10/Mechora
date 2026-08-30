@@ -24,6 +24,7 @@ Create `watchs_co_fe/.env`:
 
 ```
 VITE_API_BASE_URL=http://localhost:8000
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
 ## Auth, Cookies & Guest Tokens

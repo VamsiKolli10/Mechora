@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import {
+  Link as RouterLink,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Alert,
   Box,
@@ -44,6 +48,7 @@ const highlights = [
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -67,7 +72,8 @@ const Login = () => {
 
     try {
       await dispatch(loginUser({ email, password })).unwrap();
-      navigate("/");
+      const redirect = searchParams.get("redirect");
+      navigate(redirect?.startsWith("/") ? redirect : "/account");
     } catch (err) {
       setError(err || "Something went wrong. Try again.");
     }
@@ -103,8 +109,8 @@ const Login = () => {
                 p: { xs: 4, md: 5 },
                 background:
                   theme.palette.mode === "dark"
-                    ? "linear-gradient(135deg, rgba(17,24,39,0.95), rgba(15,7,25,0.85))"
-                    : "linear-gradient(135deg, #f8fafc, #ede9fe)",
+                    ? "linear-gradient(135deg, #202125, #111214)"
+                    : "linear-gradient(135deg, #ebe3d5, #f8f5ee)",
                 color: theme.palette.mode === "dark" ? "#f8fafc" : theme.palette.text.primary,
               }}
             >

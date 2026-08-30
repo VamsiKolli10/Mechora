@@ -1,5 +1,8 @@
 const { query } = require("../db");
 
+const resolveQuery = (client) =>
+  client ? client.query.bind(client) : query;
+
 // Get or create cart for user
 const getOrCreateUserCart = async (userId) => {
   // Try to find existing active cart
@@ -43,15 +46,16 @@ const getOrCreateGuestCart = async (guestToken) => {
 };
 
 // Get cart with items
-const getCartWithItems = async (cartId) => {
-  const cartResult = await query("SELECT * FROM carts WHERE id = $1", [cartId]);
+const getCartWithItems = async (cartId, client = null) => {
+  const dbQuery = resolveQuery(client);
+  const cartResult = await dbQuery("SELECT * FROM carts WHERE id = $1", [cartId]);
   if (cartResult.rows.length === 0) {
     return null;
   }
 
   const cart = cartResult.rows[0];
 
-  const itemsResult = await query(
+  const itemsResult = await dbQuery(
     `SELECT 
       ci.*,
       w.id as watch_id,
@@ -64,10 +68,22 @@ const getCartWithItems = async (cartId) => {
       w.stock_quantity,
       w.is_active,
       b.name as brand_name,
-      b.slug as brand_slug
+      b.slug as brand_slug,
+      media.primary_image_url,
+      media.primary_image_alt
     FROM cart_items ci
     JOIN watches w ON ci.watch_id = w.id
     LEFT JOIN brands b ON w.brand_id = b.id
+    LEFT JOIN LATERAL (
+      SELECT
+        a.url AS primary_image_url,
+        a.alt_text AS primary_image_alt
+      FROM assets a
+      WHERE a.watch_id = w.id
+        AND a.type IN ('image', 'thumbnail')
+      ORDER BY a.sort_order ASC, a.created_at ASC
+      LIMIT 1
+    ) media ON true
     WHERE ci.cart_id = $1
     ORDER BY ci.created_at ASC`,
     [cartId]
@@ -115,6 +131,9 @@ const addItemToCart = async (cartId, watchId, quantity = 1) => {
   if (existingItem.rows.length > 0) {
     // Update quantity
     const newQuantity = existingItem.rows[0].quantity + quantity;
+    if (newQuantity > watch.stock_quantity || newQuantity > 10) {
+      throw new Error("Insufficient stock");
+    }
     const result = await query(
       `UPDATE cart_items 
        SET quantity = $1, updated_at = CURRENT_TIMESTAMP 
@@ -160,7 +179,7 @@ const updateCartItemQuantity = async (cartId, cartItemId, quantity) => {
   }
 
   const item = itemResult.rows[0];
-  if (item.stock_quantity < quantity) {
+  if (item.stock_status !== "in_stock" || item.stock_quantity < quantity) {
     throw new Error("Insufficient stock");
   }
 
@@ -193,8 +212,9 @@ const removeCartItem = async (cartId, cartItemId) => {
 };
 
 // Clear cart
-const clearCart = async (cartId) => {
-  await query("DELETE FROM cart_items WHERE cart_id = $1", [cartId]);
+const clearCart = async (cartId, client = null) => {
+  const dbQuery = resolveQuery(client);
+  await dbQuery("DELETE FROM cart_items WHERE cart_id = $1", [cartId]);
   return { message: "Cart cleared" };
 };
 

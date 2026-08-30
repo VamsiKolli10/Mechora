@@ -9,45 +9,47 @@ export const ColorModeContext = createContext({
 const paletteTokens = (mode) =>
   mode === "light"
     ? {
-        primary: { main: "#111936" },
-        secondary: { main: "#7c3aed" },
-        info: { main: "#0ea5e9" },
+        primary: { main: "#1c1a16", contrastText: "#fffdf8" },
+        secondary: { main: "#9a7137", contrastText: "#fffdf8" },
+        success: { main: "#42705a" },
+        info: { main: "#5f7180" },
         background: {
-          default: "#f6f7fb",
-          paper: "rgba(255,255,255,0.9)",
-          accent: "#eef2ff",
+          default: "#f5f2eb",
+          paper: "#fffdf8",
+          accent: "#ebe5da",
         },
-        divider: "rgba(15,23,42,0.08)",
-        text: { primary: "#0f172a", secondary: "#5b6478" },
+        divider: "rgba(44,39,31,0.12)",
+        text: { primary: "#1c1a16", secondary: "#6f695f" },
       }
     : {
-        primary: { main: "#cbd5ff" },
-        secondary: { main: "#c084fc" },
-        info: { main: "#38bdf8" },
+        primary: { main: "#f3ede2", contrastText: "#121315" },
+        secondary: { main: "#d0aa6b", contrastText: "#121315" },
+        success: { main: "#79aa8d" },
+        info: { main: "#94a8b6" },
         background: {
-          default: "#050714",
-          paper: "rgba(10,15,35,0.85)",
-          accent: "#0f172a",
+          default: "#0c0d0f",
+          paper: "#151619",
+          accent: "#202125",
         },
-        divider: "rgba(226,232,240,0.12)",
-        text: { primary: "#f8f9ff", secondary: "#a8b3cf" },
+        divider: "rgba(240,233,220,0.14)",
+        text: { primary: "#f3ede2", secondary: "#aaa398" },
       };
 
 const gradientTokens = (mode) =>
   mode === "light"
     ? {
-        hero: "linear-gradient(135deg, #fef3c7, #e0e7ff)",
-        glass: "linear-gradient(135deg, rgba(255,255,255,0.75), rgba(226,232,255,0.8))",
+        hero: "linear-gradient(135deg, #ece4d5, #f9f7f1)",
+        glass: "linear-gradient(145deg, #fffdf8, #f9f5ed)",
       }
     : {
-        hero: "linear-gradient(135deg, #1b1230, #0f1b3d)",
-        glass: "linear-gradient(135deg, rgba(12,16,35,0.9), rgba(19,27,55,0.8))",
+        hero: "linear-gradient(135deg, #29251f, #111214)",
+        glass: "linear-gradient(145deg, #17181b, #111214)",
       };
 
 const shadows = (mode) =>
   mode === "light"
-    ? ["none", "0 10px 40px rgba(15,23,42,0.08)"]
-    : ["none", "0 20px 55px rgba(0,0,0,0.45)"];
+    ? ["none", "0 18px 55px rgba(45,38,27,0.10)"]
+    : ["none", "0 24px 65px rgba(0,0,0,0.42)"];
 
 const buildTheme = (mode) => {
   const palette = paletteTokens(mode);
@@ -59,32 +61,44 @@ const buildTheme = (mode) => {
       ...palette,
     },
     typography: {
-      fontFamily: "'Space Grotesk', 'Inter', 'Roboto', sans-serif",
+      fontFamily: "'Avenir Next', 'Segoe UI', sans-serif",
       h1: {
-        fontWeight: 600,
-        letterSpacing: "-0.04em",
+        fontFamily: "'Iowan Old Style', 'Baskerville', Georgia, serif",
+        fontWeight: 500,
+        letterSpacing: "-0.035em",
+        lineHeight: 1.02,
       },
       h2: {
-        fontWeight: 600,
-        letterSpacing: "-0.02em",
+        fontFamily: "'Iowan Old Style', 'Baskerville', Georgia, serif",
+        fontWeight: 500,
+        letterSpacing: "-0.03em",
+        lineHeight: 1.08,
+      },
+      h3: {
+        fontFamily: "'Iowan Old Style', 'Baskerville', Georgia, serif",
+        fontWeight: 500,
       },
       subtitle1: {
         fontWeight: 500,
       },
       button: {
         fontWeight: 600,
-        letterSpacing: "0.02em",
+        letterSpacing: "0.04em",
       },
+      overline: { fontWeight: 700, letterSpacing: "0.16em" },
     },
-    shape: { borderRadius: 12 },
+    shape: { borderRadius: 14 },
     components: {
       MuiCssBaseline: {
         styleOverrides: {
           body: {
             backgroundColor: palette.background.default,
             backgroundImage:
-              "radial-gradient(circle at 20% 20%, rgba(124,58,237,0.08), transparent 60%), radial-gradient(circle at 80% 0, rgba(14,165,233,0.08), transparent 55%)",
+              mode === "light"
+                ? "radial-gradient(circle at 10% 0%, rgba(154,113,55,0.08), transparent 36%)"
+                : "radial-gradient(circle at 10% 0%, rgba(208,170,107,0.08), transparent 34%)",
             minHeight: "100vh",
+            WebkitFontSmoothing: "antialiased",
           },
           "*, *::before, *::after": {
             boxSizing: "border-box",
@@ -95,21 +109,22 @@ const buildTheme = (mode) => {
         styleOverrides: {
           root: ({ theme }) => ({
             backgroundImage: gradients.glass,
-            borderRadius: theme.shape.borderRadius,
+            borderRadius: theme.shape.borderRadius * 1.25,
             border: `1px solid ${theme.palette.divider}`,
-            boxShadow: theme.palette.mode === "dark" ? soft : none,
+            boxShadow: theme.palette.mode === "dark" ? "none" : soft,
           }),
         },
       },
       MuiButton: {
         styleOverrides: {
           root: {
-            borderRadius: 999,
+            borderRadius: 10,
             textTransform: "none",
             fontWeight: 600,
             letterSpacing: "0.01em",
             boxShadow: "none",
-            paddingInline: 24,
+            paddingInline: 22,
+            minHeight: 42,
             transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
             "&:disabled": {
               opacity: 0.5,
@@ -117,12 +132,10 @@ const buildTheme = (mode) => {
             },
           },
           containedPrimary: {
-            backgroundImage:
-              "linear-gradient(100deg, #7c3aed, #4f46e5)",
-            color: "#fff",
+            backgroundImage: "none",
             "&:hover": {
-              backgroundImage:
-                "linear-gradient(100deg, #8b5cf6, #6366f1)",
+              backgroundImage: "none",
+              transform: "translateY(-1px)",
             },
           },
         },
@@ -182,7 +195,9 @@ const buildTheme = (mode) => {
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: 2,
+            borderRadius: 20,
+            border: `1px solid ${palette.divider}`,
+            backgroundImage: "none",
           },
         },
       },

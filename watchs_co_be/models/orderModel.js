@@ -1,5 +1,8 @@
 const { query } = require("../db");
 
+const resolveQuery = (client) =>
+  client ? client.query.bind(client) : query;
+
 // Generate order number
 const generateOrderNumber = () => {
   const timestamp = Date.now();
@@ -8,9 +11,10 @@ const generateOrderNumber = () => {
 };
 
 // Create order with items (transactional)
-const createOrder = async (orderData) => {
+const createOrder = async (orderData, client = null) => {
   // Note: In production, you'd want to use a transaction client
   // For now, we'll use individual queries
+  const dbQuery = resolveQuery(client);
   
   const {
     user_id,
@@ -27,7 +31,7 @@ const createOrder = async (orderData) => {
   const order_number = generateOrderNumber();
 
   // Create order
-  const orderResult = await query(
+  const orderResult = await dbQuery(
     `INSERT INTO orders (
       order_number, user_id, guest_email, status,
       subtotal, tax_amount, shipping_amount, total_amount,
@@ -52,7 +56,7 @@ const createOrder = async (orderData) => {
   const order = orderResult.rows[0];
 
   // Add order status event
-  await query(
+  await dbQuery(
     `INSERT INTO order_status_events (order_id, status, notes)
      VALUES ($1, $2, $3)`,
     [order.id, "pending", "Order created"]
@@ -62,14 +66,15 @@ const createOrder = async (orderData) => {
 };
 
 // Add items to order
-const addOrderItems = async (orderId, items) => {
+const addOrderItems = async (orderId, items, client = null) => {
+  const dbQuery = resolveQuery(client);
   const orderItems = [];
 
   for (const item of items) {
     const { watch_id, quantity, unit_price, watch_snapshot } = item;
     const total_price = unit_price * quantity;
 
-    const result = await query(
+    const result = await dbQuery(
       `INSERT INTO order_items (
         order_id, watch_id, quantity, unit_price, total_price, watch_snapshot
       ) VALUES ($1, $2, $3, $4, $5, $6)
@@ -283,4 +288,3 @@ module.exports = {
   getUserOrders,
   updateOrderStatus,
 };
-

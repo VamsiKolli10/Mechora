@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const jwt = require("jsonwebtoken");
+const jwt = require("./jwt");
 const config = require("../config/secrets");
 const logger = require("./logger");
 

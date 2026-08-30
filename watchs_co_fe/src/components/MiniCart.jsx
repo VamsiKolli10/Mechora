@@ -48,14 +48,14 @@ const MiniCart = () => {
 
   return (
     <>
-      <IconButton onClick={handleOpen} color="inherit">
+      <IconButton onClick={handleOpen} color="inherit" aria-label={`Open cart with ${itemCount} items`}>
         <Badge badgeContent={itemCount} color="secondary">
           <CartIcon />
         </Badge>
       </IconButton>
 
       <Drawer anchor="right" open={open} onClose={handleClose}>
-        <Box sx={{ width: 400, p: 3, height: "100%", display: "flex", flexDirection: "column" }}>
+        <Box sx={{ width: { xs: "100vw", sm: 400 }, p: 3, height: "100%", display: "flex", flexDirection: "column" }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               Shopping Cart ({itemCount})
@@ -88,8 +88,8 @@ const MiniCart = () => {
                       <Stack direction="row" spacing={2}>
                         <CardMedia
                           component="img"
-                          image={item.assets?.[0]?.url || "/images/hero1.png"}
-                          alt={item.model}
+                          image={item.primary_image_url || "/images/hero1.png"}
+                          alt={item.primary_image_alt || item.model}
                           sx={{ width: 80, height: 80, borderRadius: 1, objectFit: "cover" }}
                         />
                         <Box sx={{ flex: 1 }}>
@@ -107,6 +107,7 @@ const MiniCart = () => {
                           size="small"
                           onClick={() => handleRemove(item.id)}
                           color="error"
+                          aria-label={`Remove ${item.model} from cart`}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>

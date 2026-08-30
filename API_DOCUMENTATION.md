@@ -230,6 +230,44 @@ PUT /api/orders/:orderId/status
 
 ---
 
+## Payment Endpoints
+
+### Create Payment Intent
+```
+POST /api/payments/intent
+```
+Create a Stripe Payment Intent for an order.
+
+**Body:**
+```json
+{
+  "order_id": 123,
+  "guest_email": "guest@example.com",
+  "payment_method": "card"
+}
+```
+
+**Response:**
+```json
+{
+  "client_secret": "pi_123_secret_abc",
+  "payment_intent_id": "pi_123",
+  "payment_id": 55,
+  "order_id": 123,
+  "amount": 120000,
+  "currency": "usd",
+  "status": "requires_payment_method"
+}
+```
+
+### Stripe Webhook
+```
+POST /api/payments/webhook
+```
+Stripe webhook endpoint (server-to-server). The request must include a valid `Stripe-Signature` header.
+
+---
+
 ## Watch Endpoints
 
 ### Get All Watches
@@ -289,6 +327,98 @@ GET /api/watches/:id
 ```
 GET /api/watches/search/:query?page=1&limit=20
 ```
+
+---
+
+## Product Endpoints
+
+Products mirror the watch catalog and share the same schema and filters.
+
+### Get All Products
+```
+GET /api/products?page=1&limit=20&brand_id=1&min_price=1000&max_price=10000&sort_by=sale_price&sort_order=ASC
+```
+
+**Response:**
+```json
+{
+  "products": [...],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 100,
+    "totalPages": 5
+  }
+}
+```
+
+### Get Featured Products
+```
+GET /api/products/featured?limit=10
+```
+
+### Get Product by Slug
+```
+GET /api/products/slug/:slug
+```
+
+**Response includes:**
+- Product details
+- Assets (images, videos)
+- Recommended products
+
+### Get Product by ID
+```
+GET /api/products/:id
+```
+
+### Search Products
+```
+GET /api/products/search/:query?page=1&limit=20
+```
+
+### Product Search Suggestions
+```
+GET /api/products/suggestions?q=rol&limit=10
+```
+
+### Create Product
+```
+POST /api/products
+```
+**Requires:** Authentication (Admin)
+
+**Body:**
+```json
+{
+  "brand_id": 1,
+  "collection_id": 2,
+  "brand": "Rolex",
+  "model": "Submariner",
+  "reference": "124060",
+  "sku": "ROLEX-124060",
+  "sale_price": 9800,
+  "msrp": 10500,
+  "stock_status": "in_stock",
+  "stock_quantity": 3,
+  "condition": "new",
+  "description": "41mm no-date diver",
+  "is_active": true,
+  "is_featured": false
+}
+```
+
+### Update Product
+```
+PUT /api/products/:id
+```
+**Requires:** Authentication (Admin)
+
+### Delete Product
+```
+DELETE /api/products/:id
+```
+**Requires:** Authentication (Admin)
 
 ---
 
@@ -439,6 +569,61 @@ POST /api/auth/signup
 }
 ```
 
+### Refresh Session
+```
+POST /api/auth/refresh
+```
+
+**Body (optional):**
+```json
+{
+  "refresh_token": "optional_refresh_token"
+}
+```
+
+### Logout
+```
+POST /api/auth/logout
+```
+**Requires:** Authentication
+
+### Request Password Reset
+```
+POST /api/auth/password-reset/request
+```
+
+**Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+### Reset Password
+```
+POST /api/auth/password-reset
+```
+
+**Body:**
+```json
+{
+  "token": "reset_token_from_email",
+  "password": "newpassword123"
+}
+```
+
+### Verify Email
+```
+POST /api/auth/verify-email
+```
+
+**Body:**
+```json
+{
+  "token": "verification_token_from_email"
+}
+```
+
 ---
 
 ## Health Check
@@ -475,4 +660,3 @@ All endpoints return errors in the following format:
 - `401` - Unauthorized
 - `404` - Not Found
 - `500` - Internal Server Error
-

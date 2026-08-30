@@ -3,7 +3,7 @@ const Address = require("../models/addressModel");
 const PaymentMethod = require("../models/paymentMethodModel");
 const Order = require("../models/orderModel");
 const { query } = require("../db");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const { authenticator } = require("otplib");
 const { validatePassword } = require("../middleware/passwordValidator");
 

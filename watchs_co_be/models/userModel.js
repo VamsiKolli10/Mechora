@@ -11,10 +11,20 @@ const getUserById = (id) => {
 };
 
 // CREATE user
-const createUser = ({ name, hashedPassword, email, role = "customer" }) => {
+const createUser = ({
+  name,
+  hashedPassword,
+  email,
+  role = "customer",
+  supabaseUserId = null,
+  emailVerified = false,
+}) => {
   return query(
-    "INSERT INTO users (name, password, email, branch_id, role) VALUES (LOWER(TRIM($1)), $2, LOWER(TRIM($3)), $4, $5) RETURNING id, name, email, role",
-    [name, hashedPassword, email, 1, role]
+    `INSERT INTO users
+       (name, password, email, branch_id, role, supabase_user_id, email_verified)
+     VALUES (TRIM($1), $2, LOWER(TRIM($3)), $4, $5, $6, $7)
+     RETURNING id, supabase_user_id, name, email, role, email_verified, mfa_enabled`,
+    [name, hashedPassword, email, 1, role, supabaseUserId, emailVerified]
   );
 };
 
@@ -48,6 +58,20 @@ const findUserByEmail = (email) => {
   return query("SELECT * FROM users WHERE email = $1", [email]);
 };
 
+const findUserBySupabaseId = (supabaseUserId) =>
+  query("SELECT * FROM users WHERE supabase_user_id = $1", [supabaseUserId]);
+
+const linkSupabaseIdentity = (userId, supabaseUserId, emailVerified) =>
+  query(
+    `UPDATE users
+       SET supabase_user_id = $1,
+           email_verified = $2,
+           updated_at = CURRENT_TIMESTAMP
+     WHERE id = $3
+     RETURNING *`,
+    [supabaseUserId, emailVerified, userId]
+  );
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -55,4 +79,6 @@ module.exports = {
   updateUser,
   deleteUser,
   findUserByEmail,
+  findUserBySupabaseId,
+  linkSupabaseIdentity,
 };

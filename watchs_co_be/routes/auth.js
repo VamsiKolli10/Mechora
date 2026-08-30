@@ -7,6 +7,7 @@ const {
   resetPassword,
   verifyEmail,
   logout,
+  supabaseSession,
 } = require("../controllers/authController");
 const { passwordValidator } = require("../middleware/passwordValidator");
 const { authRateLimiter } = require("../middleware/rateLimiter");
@@ -27,6 +28,7 @@ router.post(
   signup
 );
 router.post("/refresh", validateRequest(authSchemas.refresh), refreshToken);
+router.post("/supabase-session", supabaseSession);
 router.post(
   "/password-reset/request",
   validateRequest(authSchemas.requestPasswordReset),

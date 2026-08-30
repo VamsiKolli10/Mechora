@@ -27,6 +27,17 @@ Create a `.env` (or `.env.local`) per service with the following keys:
 | `COOKIE_SECURE` | Force secure cookies (`true` in production). |
 | `COOKIE_SAMESITE` | `lax` (default), `strict`, or `none`. |
 | `CLIENT_ORIGIN` | Comma separated list of allowed front-end origins (defaults to `http://localhost:5173,http://localhost:3000`). |
+| `EMAIL_DELIVERY` | Email delivery mode: `log` (default), `file`, or `smtp`. |
+| `EMAIL_OUTBOX_PATH` | Output folder for `file` delivery (defaults to `watchs_co_be/outbox`). |
+| `EMAIL_FROM` | Friendly from address for outbound mail. |
+| `APP_BASE_URL` | Base URL used to build verification/reset links. |
+| `EMAIL_VERIFY_PATH` | Path appended to `APP_BASE_URL` for email verification links. |
+| `PASSWORD_RESET_PATH` | Path appended to `APP_BASE_URL` for password reset links. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | SMTP settings when `EMAIL_DELIVERY=smtp`. |
+| `STRIPE_SECRET_KEY` | Stripe API secret key for payment intents. |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret. |
+| `STRIPE_CURRENCY` | Currency for Stripe payment intents (default `usd`). |
+| `STRIPE_API_VERSION` | Stripe API version override (default `2023-10-16`). |
 
 > **Tip:** The Jest setup file seeds all required secrets for the test environment, but local development still needs real values.
 

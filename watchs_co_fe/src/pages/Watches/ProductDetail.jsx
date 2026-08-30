@@ -14,6 +14,7 @@ import {
   CircularProgress,
   Alert,
   Card,
+  CardContent,
   CardMedia,
   Tabs,
   Tab,
@@ -22,14 +23,17 @@ import {
   TableCell,
   TableRow,
   Breadcrumbs,
+  Snackbar,
 } from "@mui/material";
 import {
+  Add,
   Favorite,
   FavoriteBorder,
   ShoppingCart,
   ArrowBack,
   Share,
   CheckCircle,
+  Remove,
 } from "@mui/icons-material";
 import {
   fetchWatchBySlug,
@@ -50,6 +54,12 @@ const ProductDetail = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [tabValue, setTabValue] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [notice, setNotice] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
   useEffect(() => {
     dispatch(clearCurrentWatch());
@@ -73,9 +83,29 @@ const ProductDetail = () => {
     }
   }, [currentWatch, user, dispatch]);
 
-  const handleAddToCart = () => {
-    if (currentWatch) {
-      dispatch(addToCart({ watch_id: currentWatch.id, quantity }));
+  const handleAddToCart = async ({ checkout = false } = {}) => {
+    if (!currentWatch) return;
+    setAdding(true);
+    try {
+      await dispatch(
+        addToCart({ watch_id: currentWatch.id, quantity })
+      ).unwrap();
+      setNotice({
+        open: true,
+        severity: "success",
+        message: `${quantity} ${quantity === 1 ? "watch" : "watches"} added to your cart`,
+      });
+      if (checkout) {
+        navigate("/checkout");
+      }
+    } catch (cartError) {
+      setNotice({
+        open: true,
+        severity: "error",
+        message: cartError || "This watch could not be added to your cart",
+      });
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -102,6 +132,34 @@ const ProductDetail = () => {
     }).format(price);
   };
 
+  const handleShare = async () => {
+    const shareData = {
+      title: `${currentWatch.brand_name || currentWatch.brand} ${currentWatch.model}`,
+      text: `View this watch on Mechora`,
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        setNotice({
+          open: true,
+          severity: "success",
+          message: "Product link copied",
+        });
+      }
+    } catch (shareError) {
+      if (shareError?.name !== "AbortError") {
+        setNotice({
+          open: true,
+          severity: "error",
+          message: "The product link could not be shared",
+        });
+      }
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
@@ -123,10 +181,13 @@ const ProductDetail = () => {
 
   const images = currentWatch.assets?.filter((a) => a.type === "image") || [];
   const mainImage = images[selectedImage] || images[0];
+  const availableQuantity = Math.max(Number(currentWatch.stock_quantity) || 0, 0);
+  const inStock =
+    currentWatch.stock_status === "in_stock" && availableQuantity > 0;
 
   return (
-    <Box sx={{ py: 4 }}>
-      <Breadcrumbs sx={{ mb: 3 }}>
+    <Box sx={{ py: { xs: 3, md: 6 } }}>
+      <Breadcrumbs sx={{ mb: 3, color: "text.secondary", fontSize: 14 }}>
         <Link to="/" style={{ textDecoration: "none", color: "inherit" }}>
           Home
         </Link>
@@ -136,16 +197,20 @@ const ProductDetail = () => {
         <Typography color="text.primary">{currentWatch.model}</Typography>
       </Breadcrumbs>
 
-      <Grid container spacing={4}>
+      <Grid container spacing={{ xs: 4, md: 7 }}>
         {/* Images */}
         <Grid item xs={12} md={6}>
           <Stack spacing={2}>
             <Paper
+              elevation={0}
               sx={{
                 aspectRatio: "1",
                 overflow: "hidden",
-                borderRadius: 2,
+                borderRadius: 4,
                 position: "relative",
+                bgcolor: "background.accent",
+                border: 1,
+                borderColor: "divider",
               }}
             >
               <CardMedia
@@ -155,14 +220,21 @@ const ProductDetail = () => {
                 sx={{
                   width: "100%",
                   height: "100%",
-                  objectFit: "cover",
+                  objectFit: "contain",
+                  p: { xs: 2, md: 4 },
                 }}
+              />
+              <Chip
+                label="Mechora selection"
+                size="small"
+                sx={{ position: "absolute", top: 16, left: 16, bgcolor: "background.paper" }}
               />
             </Paper>
             {images.length > 1 && (
               <Stack direction="row" spacing={1} sx={{ overflowX: "auto" }}>
                 {images.map((image, index) => (
                   <Paper
+                    elevation={0}
                     key={image.id}
                     onClick={() => setSelectedImage(index)}
                     sx={{
@@ -171,7 +243,7 @@ const ProductDetail = () => {
                       cursor: "pointer",
                       border: selectedImage === index ? 2 : 1,
                       borderColor: selectedImage === index ? "primary.main" : "divider",
-                      borderRadius: 1,
+                      borderRadius: 2,
                       overflow: "hidden",
                     }}
                   >
@@ -190,12 +262,28 @@ const ProductDetail = () => {
 
         {/* Product Info */}
         <Grid item xs={12} md={6}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 2.5, md: 4 },
+              borderRadius: 4,
+              border: 1,
+              borderColor: "divider",
+            }}
+          >
           <Stack spacing={3}>
             <Box>
-              <Typography variant="overline" color="text.secondary">
+              <Typography
+                variant="overline"
+                color="secondary.main"
+                sx={{ letterSpacing: "0.16em" }}
+              >
                 {currentWatch.brand_name || currentWatch.brand}
               </Typography>
-              <Typography variant="h3" sx={{ fontWeight: 700, mt: 1 }}>
+              <Typography
+                variant="h2"
+                sx={{ mt: 1, fontSize: { xs: "2.25rem", md: "3.2rem" } }}
+              >
                 {currentWatch.model}
               </Typography>
               {currentWatch.reference && (
@@ -209,7 +297,10 @@ const ProductDetail = () => {
 
             <Box>
               <Stack direction="row" spacing={2} alignItems="center">
-                <Typography variant="h4" color="primary" sx={{ fontWeight: 700 }}>
+                <Typography
+                  variant="h4"
+                  sx={{ fontFamily: "Georgia, serif", fontWeight: 600 }}
+                >
                   {formatPrice(currentWatch.sale_price)}
                 </Typography>
                 {currentWatch.msrp && currentWatch.msrp > currentWatch.sale_price && (
@@ -231,10 +322,10 @@ const ProductDetail = () => {
               )}
             </Box>
 
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
               <Chip
                 label={currentWatch.stock_status?.replace("_", " ") || "Available"}
-                color={currentWatch.stock_status === "in_stock" ? "success" : "default"}
+                color={inStock ? "success" : "default"}
               />
               {currentWatch.condition && (
                 <Chip label={currentWatch.condition} variant="outlined" />
@@ -252,16 +343,50 @@ const ProductDetail = () => {
 
             {/* Actions */}
             <Stack spacing={2}>
+              {inStock && (
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Typography fontWeight={700}>Quantity</Typography>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    sx={{ border: 1, borderColor: "divider", borderRadius: 999 }}
+                  >
+                    <IconButton
+                      aria-label="Decrease quantity"
+                      disabled={quantity <= 1}
+                      onClick={() => setQuantity((previous) => previous - 1)}
+                    >
+                      <Remove />
+                    </IconButton>
+                    <Typography
+                      aria-live="polite"
+                      sx={{ minWidth: 36, textAlign: "center", fontWeight: 700 }}
+                    >
+                      {quantity}
+                    </Typography>
+                    <IconButton
+                      aria-label="Increase quantity"
+                      disabled={quantity >= Math.min(availableQuantity, 10)}
+                      onClick={() => setQuantity((previous) => previous + 1)}
+                    >
+                      <Add />
+                    </IconButton>
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary">
+                    {availableQuantity} available
+                  </Typography>
+                </Stack>
+              )}
               <Stack direction="row" spacing={2}>
                 <Button
                   variant="contained"
                   size="large"
                   startIcon={<ShoppingCart />}
-                  onClick={handleAddToCart}
-                  disabled={currentWatch.stock_status !== "in_stock"}
+                  onClick={() => handleAddToCart()}
+                  disabled={!inStock || adding}
                   fullWidth
                 >
-                  Add to Cart
+                  {adding ? <CircularProgress size={22} color="inherit" /> : "Add to bag"}
                 </Button>
                 <IconButton
                   onClick={handleWishlistToggle}
@@ -270,32 +395,50 @@ const ProductDetail = () => {
                 >
                   {wishlistStatus[currentWatch.id] ? <Favorite /> : <FavoriteBorder />}
                 </IconButton>
-                <IconButton size="large">
+                <IconButton
+                  size="large"
+                  aria-label="Share this watch"
+                  onClick={handleShare}
+                >
                   <Share />
                 </IconButton>
               </Stack>
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={() => handleAddToCart({ checkout: true })}
+                disabled={!inStock || adding}
+              >
+                Buy it now
+              </Button>
 
               <Stack spacing={1}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CheckCircle color="success" fontSize="small" />
-                  <Typography variant="body2">Authenticated by Swiss watchmakers</Typography>
+                  <Typography variant="body2">
+                    Condition and provenance reviewed before dispatch
+                  </Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CheckCircle color="success" fontSize="small" />
-                  <Typography variant="body2">Insured shipping included</Typography>
+                  <Typography variant="body2">Tracked, insured delivery</Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CheckCircle color="success" fontSize="small" />
-                  <Typography variant="body2">7-day return policy</Typography>
+                  <Typography variant="body2">Clear return terms before purchase</Typography>
                 </Stack>
               </Stack>
             </Stack>
           </Stack>
+          </Paper>
         </Grid>
 
         {/* Details Tabs */}
         <Grid item xs={12}>
-          <Paper>
+          <Paper
+            elevation={0}
+            sx={{ borderRadius: 4, border: 1, borderColor: "divider", overflow: "hidden" }}
+          >
             <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
               <Tab label="Specifications" />
               <Tab label="Description" />
@@ -304,11 +447,11 @@ const ProductDetail = () => {
               )}
             </Tabs>
 
-            <Box sx={{ p: 3 }}>
+            <Box sx={{ p: { xs: 2, md: 4 } }}>
               {tabValue === 0 && (
                 <Table>
                   <TableBody>
-                    {currentWatch.brand && (
+                    {(currentWatch.brand || currentWatch.brand_name) && (
                       <TableRow>
                         <TableCell sx={{ fontWeight: 600 }}>Brand</TableCell>
                         <TableCell>{currentWatch.brand_name || currentWatch.brand}</TableCell>
@@ -413,6 +556,24 @@ const ProductDetail = () => {
           </Paper>
         </Grid>
       </Grid>
+      <Snackbar
+        open={notice.open}
+        autoHideDuration={4000}
+        onClose={() =>
+          setNotice((previous) => ({ ...previous, open: false }))
+        }
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity={notice.severity}
+          variant="filled"
+          onClose={() =>
+            setNotice((previous) => ({ ...previous, open: false }))
+          }
+        >
+          {notice.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

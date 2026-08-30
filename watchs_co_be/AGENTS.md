@@ -21,6 +21,8 @@ watchs_co_be/
 ├── config/                # Configuration files
 ├── controllers/           # Route handlers
 │   ├── authController.js
+│   ├── productsController.js
+│   ├── paymentsController.js
 │   ├── userController.js
 │   └── watchesController.js
 ├── middleware/            # Express middleware
@@ -30,9 +32,10 @@ watchs_co_be/
 │   └── watchesModel.js
 ├── routes/                # API route definitions
 │   ├── auth.js
+│   ├── payments.js
+│   ├── products.js
 │   ├── users.js
-│   ├── watches.js
-│   └── products.js
+│   └── watches.js
 ├── migrations/            # Database migration files
 └── scripts/               # Utility scripts
     └── importWatches.js
@@ -63,17 +66,7 @@ watchs_co_fe/
    ```
 
 2. **Environment variables**:
-   Create a `.env` file in the `watchs_co_be` directory:
-
-   ```
-   DB_HOST=localhost
-   DB_USER=your_db_user
-   DB_PASSWORD=your_db_password
-   DB_NAME=watchs_co
-   DB_PORT=5432
-   JWT_SECRET=your_jwt_secret_key
-   PORT=8000
-   ```
+   Copy `watchs_co_be/.env.example` to `watchs_co_be/.env` and update the values.
 
 3. **Database setup**:
 
@@ -117,23 +110,7 @@ The frontend will run on `http://localhost:3000` by default.
 
 ### Running Tests
 
-The backend currently has no test suite configured. To add tests:
-
-1. Install a testing framework (e.g., Jest, Supertest):
-
-   ```bash
-   npm install --save-dev jest supertest
-   ```
-
-2. Create test files in a `__tests__` directory
-
-3. Add test scripts to `package.json`:
-   ```json
-   "scripts": {
-     "test": "jest",
-     "test:watch": "jest --watch"
-   }
-   ```
+The backend uses Jest + Supertest. Run `npm test` inside `watchs_co_be` to execute integration and unit tests.
 
 ### API Endpoints
 
@@ -162,11 +139,19 @@ The backend currently has no test suite configured. To add tests:
 
 #### Products
 
+Products mirror the watch catalog.
+
 - `GET /api/products` - Get all products
 - `GET /api/products/:id` - Get product by ID
 - `POST /api/products` - Create new product
 - `PUT /api/products/:id` - Update product
 - `DELETE /api/products/:id` - Delete product
+- `GET /api/products/search/:query` - Search products
+
+#### Payments
+
+- `POST /api/payments/intent` - Create payment intent for an order
+- `POST /api/payments/webhook` - Stripe webhook endpoint
 
 ### Example API Calls
 

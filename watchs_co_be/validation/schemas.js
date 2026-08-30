@@ -229,7 +229,11 @@ const watchSchemas = {
         page: z.coerce.number().int().min(1).optional(),
         limit: z.coerce.number().int().min(1).max(100).optional(),
         brand_id: numberId().optional(),
+        brand_name: optionalString,
+        brand_slug: optionalString,
         collection_id: numberId().optional(),
+        collection_name: optionalString,
+        collection_slug: optionalString,
         min_price: z.coerce.number().min(0).optional(),
         max_price: z.coerce.number().min(0).optional(),
         stock_status: optionalString,
@@ -308,6 +312,18 @@ const wishlistSchemas = {
   },
 };
 
+const paymentSchemas = {
+  createIntent: {
+    body: z
+      .object({
+        order_id: numberId(),
+        payment_method: z.string().trim().max(50).optional(),
+        guest_email: emailSchema.optional(),
+      })
+      .strict(),
+  },
+};
+
 const recentSchemas = {
   add: {
     body: z.object({ watch_id: numberId() }).strict(),
@@ -379,6 +395,7 @@ module.exports = {
   brandSchemas,
   collectionSchemas,
   wishlistSchemas,
+  paymentSchemas,
   recentSchemas,
   searchSchemas,
   addressSchema,

@@ -32,9 +32,40 @@ DB_PORT=5432
 
 # JWT Configuration
 JWT_SECRET=your_jwt_secret_key_here
+JWT_REFRESH_SECRET=your_jwt_refresh_secret_here
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Guest + cookie configuration
+GUEST_TOKEN_SECRET=your_guest_token_secret
+COOKIE_SECRET=your_cookie_secret
+COOKIE_DOMAIN=
+COOKIE_SECURE=false
+COOKIE_SAMESITE=lax
 
 # Server Configuration
 PORT=8000
+CLIENT_ORIGIN=http://localhost:5173
+
+# Email delivery (log | file | smtp)
+EMAIL_DELIVERY=log
+EMAIL_OUTBOX_PATH=./outbox
+EMAIL_FROM=Mechora <no-reply@mechora.local>
+APP_BASE_URL=http://localhost:5173
+EMAIL_VERIFY_PATH=/verify-email
+PASSWORD_RESET_PATH=/password-reset
+
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+
+# Stripe payments
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_CURRENCY=usd
+STRIPE_API_VERSION=2023-10-16
 ```
 
 **Required Environment Variables:**
@@ -44,8 +75,28 @@ PORT=8000
 - `DB_PASSWORD` - PostgreSQL password
 - `DB_NAME` - Database name
 - `DB_PORT` - PostgreSQL port (default: 5432)
-- `JWT_SECRET` - Secret key for JWT tokens
+- `JWT_SECRET` - Secret key for access tokens
+- `JWT_REFRESH_SECRET` - Secret key for refresh tokens
+- `GUEST_TOKEN_SECRET` - Secret key for guest cart tokens
+- `COOKIE_SECRET` - Secret used to sign cookies
 - `PORT` - Server port (default: 8000)
+
+**Optional Email Variables:**
+
+- `EMAIL_DELIVERY` - `log` (default), `file`, or `smtp`
+- `EMAIL_OUTBOX_PATH` - Output path when `EMAIL_DELIVERY=file`
+- `EMAIL_FROM` - From address for outbound mail
+- `APP_BASE_URL` - Base URL for email links
+- `EMAIL_VERIFY_PATH` - Verify email route path
+- `PASSWORD_RESET_PATH` - Reset password route path
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` - SMTP settings
+
+**Optional Stripe Variables:**
+
+- `STRIPE_SECRET_KEY` - Stripe API secret key
+- `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret
+- `STRIPE_CURRENCY` - Currency for Stripe payment intents (default `usd`)
+- `STRIPE_API_VERSION` - Stripe API version override
 
 ### Database Setup
 
@@ -75,6 +126,7 @@ npm run migrate
 watchs_co_be/
 ├── controllers/          # Request handlers and business logic
 │   ├── authController.js
+│   ├── productsController.js
 │   ├── userController.js
 │   └── watchesController.js
 ├── models/              # Database models and query functions

@@ -2,27 +2,29 @@ import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Box,
-  Paper,
-  Typography,
-  Button,
-  Stack,
-  Grid,
-  Card,
-  CardMedia,
-  CardContent,
-  IconButton,
-  TextField,
-  Divider,
-  CircularProgress,
   Alert,
+  Box,
+  Button,
+  CardMedia,
+  CircularProgress,
+  Divider,
+  Grid,
+  IconButton,
+  LinearProgress,
+  Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableRow,
+  Typography,
 } from "@mui/material";
 import {
+  Add,
   Delete as DeleteIcon,
+  LocalShippingRounded,
+  Remove,
+  ShieldRounded,
   ShoppingCart as CartIcon,
   ArrowForward,
 } from "@mui/icons-material";
@@ -41,7 +43,6 @@ const Cart = () => {
   const { cart, items, subtotal, itemCount, loading, error } = useSelector(
     (state) => state.cart
   );
-  const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
     dispatch(fetchCart());
@@ -60,11 +61,7 @@ const Cart = () => {
   };
 
   const handleCheckout = () => {
-    if (!user) {
-      navigate("/login?redirect=/checkout");
-    } else {
-      navigate("/checkout");
-    }
+    navigate("/checkout");
   };
 
   const formatPrice = (price) => {
@@ -85,18 +82,20 @@ const Cart = () => {
 
   if (items.length === 0) {
     return (
-      <Box sx={{ py: 8, textAlign: "center" }}>
-        <CartIcon sx={{ fontSize: 80, color: "text.secondary", mb: 2 }} />
-        <Typography variant="h5" gutterBottom>
+      <Paper sx={{ py: { xs: 7, md: 11 }, px: 3, textAlign: "center", boxShadow: "none" }}>
+        <Box sx={{ width: 72, height: 72, borderRadius: "50%", bgcolor: "background.accent", display: "grid", placeItems: "center", mx: "auto", mb: 2.5 }}>
+          <CartIcon sx={{ fontSize: 32, color: "secondary.main" }} />
+        </Box>
+        <Typography variant="h3" gutterBottom>
           Your cart is empty
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Start shopping to add items to your cart
         </Typography>
         <Button variant="contained" component={Link} to="/shop">
-          Browse Watches
+          Explore the collection
         </Button>
-      </Box>
+      </Paper>
     );
   }
 
@@ -106,10 +105,14 @@ const Cart = () => {
   const total = subtotal + tax + shipping;
 
   return (
-    <Box sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ fontWeight: 700, mb: 4 }}>
-        Shopping Cart ({itemCount} {itemCount === 1 ? "item" : "items"})
-      </Typography>
+    <Box sx={{ py: { xs: 1, md: 3 } }}>
+      <Typography variant="overline" color="secondary.main">Your selection</Typography>
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "end" }} gap={1} sx={{ mb: 4 }}>
+        <Typography variant="h2" sx={{ fontSize: { xs: "2.6rem", md: "4rem" } }}>
+          Shopping bag
+        </Typography>
+        <Typography color="text.secondary">{itemCount} {itemCount === 1 ? "piece" : "pieces"} reserved for checkout</Typography>
+      </Stack>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -119,21 +122,47 @@ const Cart = () => {
 
       <Grid container spacing={4}>
         <Grid item xs={12} md={8}>
+          <Paper sx={{ p: 2.5, mb: 2.5, boxShadow: "none", bgcolor: "background.accent" }}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <LocalShippingRounded color="success" />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={700}>
+                  {subtotal >= 5000
+                    ? "You unlocked complimentary insured shipping"
+                    : `${formatPrice(5000 - subtotal)} away from complimentary insured shipping`}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min((subtotal / 5000) * 100, 100)}
+                  color="success"
+                  sx={{ mt: 1, height: 6, borderRadius: 99 }}
+                />
+              </Box>
+            </Stack>
+          </Paper>
           <Stack spacing={2}>
             {items.map((item) => (
-              <Paper key={item.id} sx={{ p: 2 }}>
+              <Paper key={item.id} sx={{ p: { xs: 2, md: 2.5 }, boxShadow: "none" }}>
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} sm={3}>
                     <CardMedia
                       component="img"
-                      image={item.assets?.[0]?.url || "/images/hero1.png"}
-                      alt={item.model}
-                      sx={{ borderRadius: 1, height: 150, objectFit: "cover" }}
+                      image={item.primary_image_url || "/images/hero1.png"}
+                      alt={item.primary_image_alt || item.model}
+                      sx={{ borderRadius: 3, height: 170, objectFit: "contain", bgcolor: "background.accent", p: 1 }}
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <Stack spacing={1}>
-                      <Typography variant="h6" component={Link} to={buildWatchDetailPath({ slug: item.slug, id: item.watch_id })}>
+                      <Typography
+                        variant="h5"
+                        component={Link}
+                        to={buildWatchDetailPath({
+                          slug: item.slug,
+                          id: item.watch_id,
+                        })}
+                        sx={{ color: "text.primary", textDecoration: "none", fontFamily: "Georgia, serif" }}
+                      >
                         {item.brand_name || item.brand} {item.model}
                       </Typography>
                       {item.reference && (
@@ -148,24 +177,45 @@ const Cart = () => {
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <Stack spacing={2} alignItems="flex-end">
-                      <TextField
-                        type="number"
-                        label="Quantity"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          handleQuantityChange(item.id, parseInt(e.target.value) || 1)
-                        }
-                        inputProps={{ min: 1, max: item.stock_quantity }}
-                        size="small"
-                        sx={{ width: 100 }}
-                      />
-                      <IconButton
-                        color="error"
-                        onClick={() => handleRemoveItem(item.id)}
-                        size="small"
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        sx={{ border: 1, borderColor: "divider", borderRadius: 999 }}
                       >
-                        <DeleteIcon />
-                      </IconButton>
+                        <IconButton
+                          size="small"
+                          aria-label={`Decrease quantity of ${item.model}`}
+                          onClick={() =>
+                            handleQuantityChange(item.id, item.quantity - 1)
+                          }
+                        >
+                          <Remove fontSize="small" />
+                        </IconButton>
+                        <Typography
+                          aria-live="polite"
+                          sx={{ minWidth: 32, textAlign: "center", fontWeight: 700 }}
+                        >
+                          {item.quantity}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          aria-label={`Increase quantity of ${item.model}`}
+                          disabled={item.quantity >= item.stock_quantity}
+                          onClick={() =>
+                            handleQuantityChange(item.id, item.quantity + 1)
+                          }
+                        >
+                          <Add fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                      <Button
+                        color="error"
+                        size="small"
+                        startIcon={<DeleteIcon />}
+                        onClick={() => handleRemoveItem(item.id)}
+                      >
+                        Remove
+                      </Button>
                       <Typography variant="h6">
                         {formatPrice(item.price_at_added * item.quantity)}
                       </Typography>
@@ -178,9 +228,10 @@ const Cart = () => {
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, position: "sticky", top: 100 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Order Summary
+          <Paper sx={{ p: { xs: 2.5, md: 3.5 }, position: "sticky", top: 150, boxShadow: "none", borderColor: "secondary.main" }}>
+            <Typography variant="overline" color="secondary.main">Checkout</Typography>
+            <Typography variant="h4" sx={{ mb: 2, fontFamily: "Georgia, serif" }}>
+              Order summary
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <Table>
@@ -221,7 +272,7 @@ const Cart = () => {
               onClick={handleCheckout}
               sx={{ mt: 3 }}
             >
-              Proceed to Checkout
+              Continue to checkout
             </Button>
             <Button
               variant="outlined"
@@ -232,6 +283,21 @@ const Cart = () => {
             >
               Continue Shopping
             </Button>
+            <Button
+              color="error"
+              fullWidth
+              onClick={() => dispatch(clearCart())}
+              sx={{ mt: 1 }}
+            >
+              Clear cart
+            </Button>
+            <Divider sx={{ my: 2 }} />
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <ShieldRounded color="success" fontSize="small" />
+              <Typography variant="caption" color="text.secondary">
+                Authentication, insured delivery, and secure payment are included.
+              </Typography>
+            </Stack>
           </Paper>
         </Grid>
       </Grid>

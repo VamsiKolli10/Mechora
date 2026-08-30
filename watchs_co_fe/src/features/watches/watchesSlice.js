@@ -1,13 +1,16 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import api from "@/utils/api";
+import { productsApi } from "@/services/productsApi";
 import { getErrorMessage } from "@/utils/errors";
 
 export const fetchWatches = createAsyncThunk(
   "watches/fetchWatches",
   async (params = {}, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/watches`, { params });
-      return data;
+      const { data } = await productsApi.getProducts(params);
+      return {
+        watches: data.products || data.watches || [],
+        pagination: data.pagination,
+      };
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch watches"));
     }
@@ -18,7 +21,7 @@ export const fetchWatchBySlug = createAsyncThunk(
   "watches/fetchWatchBySlug",
   async (slug, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/watches/slug/${slug}`);
+      const { data } = await productsApi.getProductBySlug(slug);
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch watch"));
@@ -30,7 +33,7 @@ export const fetchWatchById = createAsyncThunk(
   "watches/fetchWatchById",
   async (id, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/watches/${id}`);
+      const { data } = await productsApi.getProductById(id);
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch watch"));
@@ -42,9 +45,7 @@ export const fetchFeaturedWatches = createAsyncThunk(
   "watches/fetchFeaturedWatches",
   async (limit = 10, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/watches/featured`, {
-        params: { limit },
-      });
+      const { data } = await productsApi.getFeaturedProducts(limit);
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch featured watches"));
@@ -56,10 +57,11 @@ export const searchWatches = createAsyncThunk(
   "watches/searchWatches",
   async ({ query, page = 1, limit = 20 }, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/search`, {
-        params: { q: query, page, limit },
-      });
-      return data;
+      const { data } = await productsApi.searchProducts(query, { page, limit });
+      return {
+        watches: data.products || data.watches || [],
+        pagination: data.pagination,
+      };
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Search failed"));
     }
@@ -73,9 +75,7 @@ export const getSearchSuggestions = createAsyncThunk(
       return [];
     }
     try {
-      const { data } = await api.get(`/api/search/suggestions`, {
-        params: { q: query },
-      });
+      const { data } = await productsApi.getSearchSuggestions(query);
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to get suggestions"));
@@ -87,7 +87,7 @@ export const fetchBrands = createAsyncThunk(
   "watches/fetchBrands",
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/brands`);
+      const { data } = await productsApi.getBrands();
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch brands"));
@@ -99,7 +99,7 @@ export const fetchCollections = createAsyncThunk(
   "watches/fetchCollections",
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await api.get(`/api/collections`);
+      const { data } = await productsApi.getCollections();
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch collections"));
@@ -123,7 +123,9 @@ const initialState = {
   },
   filters: {
     brand_id: null,
+    brand_name: null,
     collection_id: null,
+    collection_name: null,
     min_price: null,
     max_price: null,
     stock_status: null,
@@ -142,6 +144,9 @@ const watchesSlice = createSlice({
   reducers: {
     setFilters: (state, action) => {
       state.filters = { ...state.filters, ...action.payload };
+    },
+    replaceFilters: (state, action) => {
+      state.filters = { ...initialState.filters, ...action.payload };
     },
     clearFilters: (state) => {
       state.filters = initialState.filters;
@@ -202,7 +207,12 @@ const watchesSlice = createSlice({
   },
 });
 
-export const { setFilters, clearFilters, clearSearchSuggestions, clearCurrentWatch } =
-  watchesSlice.actions;
+export const {
+  setFilters,
+  replaceFilters,
+  clearFilters,
+  clearSearchSuggestions,
+  clearCurrentWatch,
+} = watchesSlice.actions;
 export const selectWatches = (state) => state.watches;
 export default watchesSlice.reducer;

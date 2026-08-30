@@ -1,12 +1,12 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import api from "@/utils/api";
+import { cartApi } from "@/services/cartApi";
 import { getErrorMessage } from "@/utils/errors";
 
 export const fetchCart = createAsyncThunk(
   "cart/fetchCart",
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await api.get("/api/cart");
+      const { data } = await cartApi.getCart();
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch cart"));
@@ -18,7 +18,7 @@ export const addToCart = createAsyncThunk(
   "cart/addToCart",
   async ({ watch_id, quantity = 1 }, { rejectWithValue }) => {
     try {
-      const { data } = await api.post("/api/cart/items", { watch_id, quantity });
+      const { data } = await cartApi.addItem({ watch_id, quantity });
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to add to cart"));
@@ -30,7 +30,7 @@ export const updateCartItem = createAsyncThunk(
   "cart/updateCartItem",
   async ({ itemId, quantity }, { rejectWithValue }) => {
     try {
-      const { data } = await api.put(`/api/cart/items/${itemId}`, { quantity });
+      const { data } = await cartApi.updateItem({ itemId, quantity });
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to update cart item"));
@@ -42,7 +42,7 @@ export const removeFromCart = createAsyncThunk(
   "cart/removeFromCart",
   async (itemId, { rejectWithValue }) => {
     try {
-      const { data } = await api.delete(`/api/cart/items/${itemId}`);
+      const { data } = await cartApi.removeItem(itemId);
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to remove from cart"));
@@ -54,7 +54,7 @@ export const clearCart = createAsyncThunk(
   "cart/clearCart",
   async (_, { rejectWithValue }) => {
     try {
-      await api.delete(`/api/cart`);
+      await cartApi.clearCart();
       return null;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to clear cart"));
@@ -71,7 +71,7 @@ export const mergeCart = createAsyncThunk(
         return rejectWithValue("Authentication required");
       }
 
-      const { data } = await api.post("/api/cart/merge");
+      const { data } = await cartApi.mergeCart();
       return data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to merge cart"));

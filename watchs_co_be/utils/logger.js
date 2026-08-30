@@ -1,39 +1,33 @@
-const levels = ["debug", "info", "warn", "error"];
-const levelPriority = {
-  debug: 10,
-  info: 20,
-  warn: 30,
-  error: 40,
+const winston = require("winston");
+
+const isProduction = process.env.NODE_ENV === "production";
+
+const redactSecrets = winston.format((info) => {
+  const serialized = JSON.stringify(info);
+  const redacted = serialized.replace(
+    /("(?:authorization|cookie|password|token|secret|api[_-]?key)"\s*:\s*)"[^"]*"/gi,
+    '$1"[REDACTED]"'
+  );
+  return JSON.parse(redacted);
+});
+
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || (isProduction ? "info" : "debug"),
+  defaultMeta: { service: "mechora-api" },
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    redactSecrets(),
+    winston.format.json()
+  ),
+  transports: [new winston.transports.Console()],
+  exitOnError: false,
+});
+
+logger.stream = {
+  write(message) {
+    logger.info(message.trim(), { source: "http" });
+  },
 };
 
-const currentLevel = process.env.LOG_LEVEL?.toLowerCase() || "info";
-
-const shouldLog = (level) => {
-  const requestedPriority = levelPriority[level] || levelPriority.info;
-  const currentPriority = levelPriority[currentLevel] || levelPriority.info;
-  return requestedPriority >= currentPriority;
-};
-
-const buildLogger = () => {
-  const logger = {};
-  levels.forEach((level) => {
-    logger[level] = (...args) => {
-      if (!shouldLog(level)) {
-        return;
-      }
-      const timestamp = new Date().toISOString();
-      // eslint-disable-next-line no-console
-      console[level === "debug" ? "log" : level](`[${timestamp}] [${level.toUpperCase()}]`, ...args);
-    };
-  });
-
-  logger.stream = {
-    write: (message) => {
-      logger.info(message.trim());
-    },
-  };
-
-  return logger;
-};
-
-module.exports = buildLogger();
+module.exports = logger;

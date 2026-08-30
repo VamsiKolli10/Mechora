@@ -1,199 +1,54 @@
-const Cart = require("../models/cartModel");
-const {
-  ensureGuestToken,
-  extractGuestToken,
-  verifyGuestToken,
-  clearGuestToken,
-} = require("../utils/guestTokens");
+const cartService = require("../services/cartService");
+const { AppError, asyncHandler } = require("../middleware/errorHandler");
+const { ensureGuestToken, extractGuestToken, verifyGuestToken, clearGuestToken } = require("../utils/guestTokens");
 
-const attachGuestToken = (payload, guestContext) => {
-  if (!guestContext?.signedToken) {
-    return payload;
-  }
-  return {
-    ...payload,
-    guest_token: guestContext.signedToken,
-  };
+const attachGuestToken = (payload, context) => context?.signedToken ? { ...payload, guest_token: context.signedToken } : payload;
+const resolveContext = (req, res) => {
+  if (req.user?.id) return { userId: req.user.id, guestContext: null };
+  const guestContext = ensureGuestToken(req, res);
+  return { userId: null, guestContext };
 };
 
-// Get cart
-exports.getCart = async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    let guestContext = null;
+exports.getCart = asyncHandler(async (req, res) => {
+  const { userId, guestContext } = resolveContext(req, res);
+  const cart = await cartService.getCurrentCart({ userId, guestToken: guestContext?.rawToken });
+  res.json(attachGuestToken(cart, guestContext));
+});
 
-    let cart;
-    if (userId) {
-      const userCart = await Cart.getOrCreateUserCart(userId);
-      cart = await Cart.getCartWithItems(userCart.id);
-    } else {
-      guestContext = ensureGuestToken(req, res);
-      const guestCart = await Cart.getOrCreateGuestCart(guestContext.rawToken);
-      cart = await Cart.getCartWithItems(guestCart.id);
-      return res.json(attachGuestToken(cart, guestContext));
-    }
+exports.addItem = asyncHandler(async (req, res) => {
+  const { watch_id: watchId, quantity = 1 } = req.body;
+  if (!watchId) throw new AppError("watch_id is required", { statusCode: 400, code: "WATCH_ID_REQUIRED" });
+  const { userId, guestContext } = resolveContext(req, res);
+  const cart = await cartService.addItem({ userId, guestToken: guestContext?.rawToken, watchId, quantity });
+  res.json(attachGuestToken(cart, guestContext));
+});
 
-    if (!cart) {
-      return res.status(404).json({ error: "Cart not found" });
-    }
+exports.updateItem = asyncHandler(async (req, res) => {
+  const { quantity } = req.body;
+  if (quantity === undefined || quantity < 0) throw new AppError("Valid quantity is required", { statusCode: 400, code: "INVALID_QUANTITY" });
+  const { userId, guestContext } = resolveContext(req, res);
+  const cart = await cartService.updateItem({ userId, guestToken: guestContext?.rawToken, itemId: req.params.itemId, quantity });
+  res.json(attachGuestToken(cart, guestContext));
+});
 
-    if (!userId) {
-      guestContext = guestContext || ensureGuestToken(req, res);
-      return res.json(attachGuestToken(cart, guestContext));
-    }
+exports.removeItem = asyncHandler(async (req, res) => {
+  const { userId, guestContext } = resolveContext(req, res);
+  const cart = await cartService.removeItem({ userId, guestToken: guestContext?.rawToken, itemId: req.params.itemId });
+  res.json(attachGuestToken(cart, guestContext));
+});
 
-    res.json(cart);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
+exports.clearCart = asyncHandler(async (req, res) => {
+  const { userId, guestContext } = resolveContext(req, res);
+  await cartService.clearCurrentCart({ userId, guestToken: guestContext?.rawToken });
+  res.json(attachGuestToken({ message: "Cart cleared" }, guestContext));
+});
 
-// Add item to cart
-exports.addItem = async (req, res) => {
-  try {
-    const { watch_id, quantity = 1 } = req.body;
-    const userId = req.user?.id;
-    let guestContext = null;
-
-    if (!watch_id) {
-      return res.status(400).json({ error: "watch_id is required" });
-    }
-
-    let cart;
-    if (userId) {
-      const userCart = await Cart.getOrCreateUserCart(userId);
-      cart = userCart;
-    } else {
-      guestContext = ensureGuestToken(req, res);
-      const guestCart = await Cart.getOrCreateGuestCart(guestContext.rawToken);
-      cart = guestCart;
-    }
-
-    await Cart.addItemToCart(cart.id, watch_id, quantity);
-    const updatedCart = await Cart.getCartWithItems(cart.id);
-
-    res.json(attachGuestToken(updatedCart, guestContext));
-  } catch (err) {
-    if (err.message.includes("not found") || err.message.includes("not available") || err.message.includes("stock")) {
-      return res.status(400).json({ error: err.message });
-    }
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// Update cart item quantity
-exports.updateItem = async (req, res) => {
-  try {
-    const { itemId } = req.params;
-    const { quantity } = req.body;
-
-    if (!quantity || quantity < 0) {
-      return res.status(400).json({ error: "Valid quantity is required" });
-    }
-
-    const userId = req.user?.id;
-    const guestContext = extractGuestToken(req);
-
-    let cartId;
-    if (userId) {
-      const userCart = await Cart.getOrCreateUserCart(userId);
-      cartId = userCart.id;
-    } else if (guestContext?.rawToken) {
-      const guestCart = await Cart.getOrCreateGuestCart(guestContext.rawToken);
-      cartId = guestCart.id;
-    } else {
-      return res.status(400).json({ error: "User or guest token required" });
-    }
-
-    await Cart.updateCartItemQuantity(cartId, itemId, quantity);
-    const updatedCart = await Cart.getCartWithItems(cartId);
-
-    res.json(attachGuestToken(updatedCart, guestContext));
-  } catch (err) {
-    if (err.message.includes("not found") || err.message.includes("stock")) {
-      return res.status(400).json({ error: err.message });
-    }
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// Remove item from cart
-exports.removeItem = async (req, res) => {
-  try {
-    const { itemId } = req.params;
-    const userId = req.user?.id;
-    const guestContext = extractGuestToken(req);
-
-    let cartId;
-    if (userId) {
-      const userCart = await Cart.getOrCreateUserCart(userId);
-      cartId = userCart.id;
-    } else if (guestContext?.rawToken) {
-      const guestCart = await Cart.getOrCreateGuestCart(guestContext.rawToken);
-      cartId = guestCart.id;
-    } else {
-      return res.status(400).json({ error: "User or guest token required" });
-    }
-
-    await Cart.removeCartItem(cartId, itemId);
-    const updatedCart = await Cart.getCartWithItems(cartId);
-
-    res.json(attachGuestToken(updatedCart, guestContext));
-  } catch (err) {
-    if (err.message.includes("not found")) {
-      return res.status(400).json({ error: err.message });
-    }
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// Clear cart
-exports.clearCart = async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const guestContext = extractGuestToken(req);
-
-    let cart;
-    if (userId) {
-      const userCart = await Cart.getOrCreateUserCart(userId);
-      cart = userCart;
-    } else if (guestContext?.rawToken) {
-      const guestCart = await Cart.getOrCreateGuestCart(guestContext.rawToken);
-      cart = guestCart;
-    } else {
-      return res.status(400).json({ error: "User or guest token required" });
-    }
-
-    await Cart.clearCart(cart.id);
-    res.json(attachGuestToken({ message: "Cart cleared" }, guestContext));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// Merge guest cart into user cart
-exports.mergeCart = async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const providedToken = req.body.guest_token;
-    const guestContext = extractGuestToken(req);
-    const verifiedFromBody = providedToken
-      ? verifyGuestToken(providedToken)
-      : null;
-    const guestToken = guestContext?.rawToken || verifiedFromBody;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    if (!guestToken) {
-      return res.status(400).json({ error: "Guest token required" });
-    }
-
-    const mergedCart = await Cart.mergeGuestCartIntoUserCart(guestToken, userId);
-    clearGuestToken(res);
-    res.json(mergedCart);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
+exports.mergeCart = asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) throw new AppError("Authentication required", { statusCode: 401, code: "AUTHENTICATION_REQUIRED" });
+  const guestContext = extractGuestToken(req);
+  const guestToken = guestContext?.rawToken || (req.body.guest_token ? verifyGuestToken(req.body.guest_token) : null);
+  const mergedCart = await cartService.mergeGuestCart({ guestToken, userId });
+  clearGuestToken(res);
+  res.json(mergedCart);
+});
