@@ -1,117 +1,183 @@
-# Mechora Engineering Notes
+# Mechora
 
-Productionizing the watch marketplace requires a coordinated backend + frontend workflow. This document replaces the CRA boilerplate and captures how to operate the two services inside this repo.
+Mechora is a personal watch storefront MVP. Customers can browse a curated catalog, search for products, create an account, manage a guest or authenticated cart, submit an order request, and review their orders.
 
-## Repository Structure
+The project is focused on a reliable customer experience. Payment processing and an administration dashboard are planned follow-up features; the current MVP does not claim that an order request has been paid.
 
-| Path | Description |
+## Product scope
+
+Included in the MVP:
+
+- Responsive React storefront with home, catalog, search, product detail, cart, checkout, and account pages.
+- Guest carts that can be migrated to an authenticated account after login.
+- Cookie-based authentication with email verification, refresh-token rotation, logout, and password reset flows.
+- Order-request creation and authenticated order history.
+- Express API backed by PostgreSQL/Supabase.
+- Catalog, brand, collection, asset, wishlist, and recently-viewed API capabilities.
+- Request validation, security headers, rate limiting, structured logging, health checks, migrations, and seed data.
+
+Deferred from the MVP:
+
+- Live Stripe payment collection and payment confirmation.
+- Seller accounts, fulfillment operations, refunds, and an admin catalog UI.
+- Multi-instance rate-limit storage and advanced operational dashboards.
+
+## Repository layout
+
+| Path | Purpose |
 | --- | --- |
-| `watchs_co_be/` | Express + Postgres API, db-migrate migrations, Jest integration/unit tests. |
-| `watchs_co_fe/` | Vite + React frontend with Redux Toolkit, Vitest unit tests. |
+| `watchs_co_be/` | Express API, PostgreSQL access, migrations, seeds, and tests |
+| `watchs_co_fe/` | Vite + React storefront, Redux state, and frontend tests |
+| `API_DOCUMENTATION.md` | API routes, authentication behavior, and request examples |
+| `watchs_co_be/migrations_supabase/` | Supabase-compatible migrations |
+| `watchs_co_be/seeds/catalog.sql` | Curated catalog seed data |
+| `CONTRIBUTING.md` | Local development and change workflow |
+| `SECURITY.md` | Secrets and production security practices |
 
-## Environment
+## Prerequisites
 
-Create a `.env` (or `.env.local`) per service with the following keys:
+- Node.js 20 LTS or newer
+- npm 10 or newer
+- PostgreSQL 15 or newer, or a Supabase project
+- Git
 
-| Variable | Description |
-| --- | --- |
-| `PORT` | API HTTP port (default `8000`). |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Postgres connection settings used by the API and migrations. |
-| `JWT_SECRET` | Symmetric signing key for access tokens (HttpOnly cookie payload). |
-| `JWT_REFRESH_SECRET` | Symmetric signing key for refresh tokens. |
-| `JWT_EXPIRES_IN` | Access token lifetime (e.g. `15m`). |
-| `JWT_REFRESH_EXPIRES_IN` | Refresh token lifetime (e.g. `7d`). |
-| `GUEST_TOKEN_SECRET` | Signing secret for guest cart cookies. |
-| `COOKIE_SECRET` | Secret used by `cookie-parser` to sign cookies. |
-| `COOKIE_DOMAIN` | Optional cookie domain override (leave unset for localhost). |
-| `COOKIE_SECURE` | Force secure cookies (`true` in production). |
-| `COOKIE_SAMESITE` | `lax` (default), `strict`, or `none`. |
-| `CLIENT_ORIGIN` | Comma separated list of allowed front-end origins (defaults to `http://localhost:5173,http://localhost:3000`). |
-| `EMAIL_DELIVERY` | Email delivery mode: `log` (default), `file`, or `smtp`. |
-| `EMAIL_OUTBOX_PATH` | Output folder for `file` delivery (defaults to `watchs_co_be/outbox`). |
-| `EMAIL_FROM` | Friendly from address for outbound mail. |
-| `APP_BASE_URL` | Base URL used to build verification/reset links. |
-| `EMAIL_VERIFY_PATH` | Path appended to `APP_BASE_URL` for email verification links. |
-| `PASSWORD_RESET_PATH` | Path appended to `APP_BASE_URL` for password reset links. |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | SMTP settings when `EMAIL_DELIVERY=smtp`. |
-| `STRIPE_SECRET_KEY` | Stripe API secret key for payment intents. |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret. |
-| `STRIPE_CURRENCY` | Currency for Stripe payment intents (default `usd`). |
-| `STRIPE_API_VERSION` | Stripe API version override (default `2023-10-16`). |
+## Local setup
 
-> **Tip:** The Jest setup file seeds all required secrets for the test environment, but local development still needs real values.
+### Install dependencies
 
-## Backend (watchs_co_be)
+```bash
+git clone https://github.com/VamsiKolli10/Mechora.git
+cd Mechora
+cd watchs_co_be && npm install
+cd ../watchs_co_fe && npm install
+```
+
+### Configure the backend
 
 ```bash
 cd watchs_co_be
-npm install
-npm run migrate   # Runs db-migrate up
-npm run maintenance  # backfills watch slugs & other background jobs
-npm run dev         # Starts the API via nodemon with live reload
+cp .env.example .env
 ```
 
-Useful scripts:
+Set the database values and replace every `change-me` secret with a long, random value. For local PostgreSQL, use the individual `DB_*` variables. For Supabase, prefer `DATABASE_URL` and set `DB_SSL=true`.
 
-- `npm run migrate` / `npm run rollback` – apply or revert db-migrate migrations.
-- `npm run maintenance` – runs background tasks (slug backfills, future import jobs) without blocking API boot.
-- `npm test` – executes Jest suites (unit + integration, including new auth + cart contracts).
+The backend requires `JWT_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_TOKEN_SECRET`, and `COOKIE_SECRET` before it will start. Development email delivery defaults to log output; configure SMTP only when real email delivery is needed.
 
-Security hardening shipped in this iteration:
+### Create the database
 
-- Enforced secrets via `config/secrets.js` (process aborts if required env vars are missing).
-- Auth now issues HttpOnly cookies, rotates refresh tokens per request, hashes long-lived tokens, and exposes MFA lifecycle endpoints.
-- Every write route now passes Zod request validation and, where applicable, RBAC (`requireAdmin`).
-- Helmet, rate limiting, structured logging (morgan + custom logger), and signed guest tokens protect API edges.
+For local PostgreSQL:
 
-## Frontend (watchs_co_fe)
+```bash
+cd watchs_co_be
+npm run migrate
+npm run maintenance
+```
+
+For Supabase, follow [`watchs_co_be/SUPABASE.md`](watchs_co_be/SUPABASE.md):
+
+```bash
+npm run migrate:supabase
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f seeds/catalog.sql
+```
+
+Use a separate database or Supabase project for integration tests. Never point destructive tests at production.
+
+### Configure the frontend
 
 ```bash
 cd watchs_co_fe
-npm install
-npm run dev      # Vite dev server on :5173
-npm run build    # Production bundle in dist/
-npm run preview  # Serve production build locally
-npm run test     # Vitest unit tests for slices/components
+cp .env.example .env.local
 ```
 
-Changes of note:
+At minimum, set `VITE_API_BASE_URL` to the backend URL. Supabase and Stripe frontend variables are only needed by the features that use them; Stripe is deferred for the current MVP.
 
-- Axios client (`src/utils/api.js`) now sends HttpOnly cookies by default—no tokens live in `localStorage`.
-- Redux auth/cart/wishlist slices were updated to rely on server-issued cookies and include unit coverage.
-- Cart bootstrapper refreshes whenever the authenticated user changes so carts migrate correctly after login.
+### Start both services
 
-## Full-stack Dev Runner
-
-The repo root now ships a tiny orchestration `package.json` so you can boot both services with one command:
+Use two terminals:
 
 ```bash
-npm install           # from repo root to install concurrently
-npm run dev           # starts backend (:8000) and Vite (:5173) together
-# or npm run start    # alias for the same concurrent runner
+# Terminal 1
+cd watchs_co_be
+npm run dev
 ```
 
-Under the hood these scripts call `npm run dev --prefix watchs_co_be` and `npm run dev --prefix watchs_co_fe`, so you can continue to use the individual service commands if you prefer.
+```bash
+# Terminal 2
+cd watchs_co_fe
+npm run dev
+```
 
-## Runbooks
+The API is available at `http://localhost:8000` and the storefront at `http://localhost:5173`.
 
-| Task | Steps |
-| --- | --- |
-| **Provision database** | Create Postgres database, set env vars, run `npm run migrate`. |
-| **Backfill / maintenance** | `npm run maintenance` (can be placed on a cron/Job runner). |
-| **Rotate secrets** | Update secrets in deployment environment, restart API (missing secrets prevent boot). |
-| **Guest cart reset** | Clear `mechora_guest_token` cookie client-side or call `/api/cart/merge` after login (API now clears cookies automatically). |
-| **CI test suite** | Backend: `cd watchs_co_be && npm test`. Frontend: `cd watchs_co_fe && npm run test -- --run` (or integrate into your CI workflow). |
+```bash
+curl http://localhost:8000/health
+```
 
-## Testing Overview
+## Development commands
 
-- **Backend**: Jest integration tests cover authentication (cookies, refresh rotation, MFA gating) and cart guest-token contracts. Run `npm test` inside `watchs_co_be`.
-- **Frontend**: Vitest exercises slice reducers; extend with component tests as UI stabilises. Run `npm run test` inside `watchs_co_fe`.
+Backend commands, from `watchs_co_be/`:
 
-## Deployment Checklist
+```bash
+npm start
+npm run dev
+npm test
+npm run test:unit
+npm run test:integration
+npm run migrate:supabase:check
+npm run maintenance
+```
 
-1. Populate env vars listed above in your secrets manager.
-2. Run migrations (`npm run migrate`).
-3. Run `npm run maintenance` if importing watches or backfilling slugs.
-4. Deploy backend + frontend; ensure `CLIENT_ORIGIN` matches deployed hosts so cookies flow correctly.
-5. Wire your CI/CD pipeline to execute backend Jest + frontend Vitest suites before deployments.
+Frontend commands, from `watchs_co_fe/`:
+
+```bash
+npm run dev
+npm run build
+npm run preview
+npm run test -- --run
+```
+
+Integration tests require a reachable test database and modify test data.
+
+## MVP order flow
+
+1. A visitor browses the catalog and adds products to a guest cart.
+2. The visitor signs in or registers; the guest cart is merged into the account cart.
+3. Checkout validates contact, shipping, and cart data.
+4. The API creates an order request with a pending/manual-review status.
+5. The customer sees confirmation and can view the order in their account.
+
+The current flow does not collect payment or mark orders as paid. Do not enable live payment credentials until Stripe and webhook handling have been tested separately.
+
+## API
+
+The API is organized by resource under `/api`, including authentication, products, watches, search, carts, wishlists, orders, accounts, brands, collections, assets, and recently viewed items. See [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md).
+
+Authentication uses secure, HttpOnly cookies. Frontend requests must send credentials, and deployed frontend origins must be listed in the backend `CLIENT_ORIGIN` configuration.
+
+## Deployment
+
+The intended deployment shape is:
+
+- Frontend: Vercel-style static hosting for the Vite build.
+- Backend: Render-style long-running Node service running `npm start` from `watchs_co_be/`.
+- Database: Supabase PostgreSQL.
+
+Release checklist:
+
+1. Configure production secrets in the host secret manager; never commit `.env` files.
+2. Set `NODE_ENV=production`, `DATABASE_URL`, `DB_SSL=true`, `CLIENT_ORIGIN`, `COOKIE_SECURE=true`, and `TRUST_PROXY=1`.
+3. Run the Supabase migration stream and seed the catalog.
+4. Build the frontend with `npm run build` and deploy `dist/`.
+5. Start the API with `npm start` and verify `/health`.
+6. Test registration, login, cart migration, order request creation, and order history in staging.
+7. Confirm logs, backups, CORS, HTTPS, cookies, and rollback instructions.
+
+See [`watchs_co_be/PRODUCTION.md`](watchs_co_be/PRODUCTION.md) and [`watchs_co_be/SUPABASE.md`](watchs_co_be/SUPABASE.md) for service-specific runbooks.
+
+## Project status
+
+This is a personal MVP, not a production marketplace platform. The next priorities are staging validation against a disposable database, reliable email delivery, browser smoke tests, and a deliberate decision about payment integration.
+
+## License
+
+See [`LICENSE`](LICENSE).

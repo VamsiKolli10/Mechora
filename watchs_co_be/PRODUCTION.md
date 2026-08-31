@@ -2,6 +2,8 @@
 
 The API can run on any Node.js host that supports a long-lived Express process. Keep the API and Vite frontend as separate deployables.
 
+The current MVP creates pending order requests for manual follow-up. Stripe payment collection is intentionally deferred; leave Stripe secrets unset until that feature is enabled and validated.
+
 ## Required runtime configuration
 
 Set these values in the host's secret manager (never commit them):
@@ -31,7 +33,7 @@ The bootstrap detects an already initialized database and records itself without
 
 ## Operational requirements
 
-- Keep Stripe variables unset while Stripe is on hold.
+- Keep Stripe variables unset while Stripe is deferred.
 - Keep RLS enabled on every public table. Application data remains API-only;
   do not add browser-role policies without reviewing ownership boundaries.
 - Configure TLS at the host or reverse proxy and forward the original protocol so secure cookies work.

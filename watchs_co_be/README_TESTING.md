@@ -2,14 +2,15 @@
 
 ## Setup
 
-1. Create a test database:
+1. Create a separate test database or Supabase test project:
 ```bash
 createdb watchs_co_test
 ```
 
-2. Copy `.env.test.example` to `.env.test` and update with your test database credentials:
+2. Configure the test database connection in the environment used by Jest. For Supabase, set `DATABASE_URL` and `DB_SSL=true`:
 ```bash
-cp .env.test.example .env.test
+export DATABASE_URL=postgresql://...
+export DB_SSL=true
 ```
 
 3. Install dependencies:
@@ -46,10 +47,13 @@ tests/
 ├── setup.js                 # Test setup and configuration
 ├── unit/                    # Unit tests
 │   └── middleware/
-│       └── passwordValidator.test.js
+│       ├── middleware tests
+│       └── service tests
 └── integration/             # Integration tests
     ├── auth.test.js
-    └── health.test.js
+    ├── cart.test.js
+    ├── health.test.js
+    └── products.test.js
 ```
 
 ## Writing Tests
@@ -84,14 +88,14 @@ describe("Authentication API", () => {
       .send({ email: "test@example.com", password: "Password123!" })
       .expect(200);
 
-    expect(response.body).toHaveProperty("token");
+    expect(response.headers["set-cookie"]).toBeDefined();
   });
 });
 ```
 
 ## Test Database
 
-- Tests use a separate test database (`watchs_co_test`)
+- Tests use a separate test database or Supabase test project
 - Tests should clean up after themselves
 - Use `beforeAll` and `afterAll` hooks for setup and teardown
 
@@ -115,10 +119,9 @@ Coverage reports are generated in the `coverage/` directory.
 
 ## Continuous Integration
 
-Tests should be run in CI/CD pipeline before deployment. Add to your CI configuration:
+Unit tests should run on every CI change. Integration tests should run when a disposable test database is available:
 
 ```yaml
-- name: Run tests
-  run: npm test
+- name: Run unit tests
+  run: npm run test:unit -- --runInBand
 ```
-
