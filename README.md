@@ -34,6 +34,20 @@ Deferred from the MVP:
 | `CONTRIBUTING.md` | Local development and change workflow |
 | `SECURITY.md` | Secrets and production security practices |
 
+## Architecture
+
+```mermaid
+flowchart LR
+    shopper[Shopper] --> storefront[Vite + React storefront]
+    storefront -->|REST + secure cookies| api[Express API]
+    api --> auth[Authentication and refresh-token rotation]
+    api --> catalog[Catalog, cart, and order services]
+    auth --> database[(PostgreSQL / Supabase)]
+    catalog --> database
+    guest[Guest cart token] --> storefront
+    storefront -->|merge after login| catalog
+```
+
 ## Prerequisites
 
 - Node.js 20 LTS or newer
