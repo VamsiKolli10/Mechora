@@ -130,7 +130,7 @@ describe("Authentication API", () => {
     test("should reject invalid refresh token payload", async () => {
       const response = await request(app)
         .post("/api/auth/refresh")
-        .send({ refresh_token: "invalid_token" })
+        .send({ refresh_token: "invalid_token_long_enough" })
         .expect(401);
 
       expect(response.body).toHaveProperty("error");

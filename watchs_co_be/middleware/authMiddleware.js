@@ -1,5 +1,7 @@
 const { verifyAccessToken } = require("../utils/tokenUtils");
 const config = require("../config/secrets");
+const { query } = require("../db");
+const { asyncHandler } = require("./errorHandler");
 
 const getTokenFromRequest = (req) => {
   const authHeader = req.headers.authorization;
@@ -17,27 +19,43 @@ const decodeToken = (token) => {
   return verifyAccessToken(token);
 };
 
-const requireAuth = (req, res, next) => {
+const authenticate = async (token) => {
+  const decoded = decodeToken(token);
+  if (!decoded) return null;
+  const { rows } = await query(
+    "SELECT id, name, email, role, session_version FROM users WHERE id = $1 AND deleted_at IS NULL",
+    [decoded.id]
+  );
+  const user = rows[0];
+  if (!user || Number(decoded.session_version || 0) !== user.session_version) return null;
+  return { ...decoded, ...user };
+};
+
+const requireAuth = asyncHandler(async (req, res, next) => {
   const token = getTokenFromRequest(req);
   if (!token) {
     return res.status(401).json({ error: "Authentication required" });
   }
 
-  const decoded = decodeToken(token);
+  const decoded = await authenticate(token);
   if (!decoded) {
     return res.status(401).json({ error: "Invalid or expired session" });
   }
 
   req.user = decoded;
   next();
-};
+});
 
-const optionalAuth = (req, res, next) => {
+const optionalAuth = asyncHandler(async (req, res, next) => {
   const token = getTokenFromRequest(req);
-  const decoded = decodeToken(token);
-  req.user = decoded || null;
+  const user = token ? await authenticate(token) : null;
+  // A previous signed-in session must refresh rather than silently changing owners.
+  if (!user && (token || req.cookies?.[config.cookies.refresh])) {
+    return res.status(401).json({ error: "Session expired. Please sign in again." });
+  }
+  req.user = user;
   next();
-};
+});
 
 const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) {

@@ -27,20 +27,11 @@ import {
   LockRounded,
   LocalShippingRounded,
 } from "@mui/icons-material";
-import {
-  Elements,
-  PaymentElement,
-  useElements,
-  useStripe,
-} from "@stripe/react-stripe-js";
-import { loadStripe } from "@stripe/stripe-js";
 import { clearCartState, fetchCart } from "@/features/cart/cartSlice";
 import { ordersApi } from "@/services/ordersApi";
-import { paymentsApi } from "@/services/paymentsApi";
+import { getErrorMessage } from "@/utils/errors";
 
-const steps = ["Review", "Delivery", "Payment", "Confirmed"];
-const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
+const steps = ["Review", "Your details", "Submit request", "Received"];
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const formatPrice = (price) =>
@@ -50,68 +41,6 @@ const formatPrice = (price) =>
     minimumFractionDigits: 0,
   }).format(Number(price) || 0);
 
-const StripePaymentForm = ({
-  clientSecret,
-  loading,
-  onSuccess,
-  setError,
-  setLoading,
-  total,
-}) => {
-  const stripe = useStripe();
-  const elements = useElements();
-
-  const handleConfirm = async () => {
-    if (!stripe || !elements) return;
-
-    setLoading(true);
-    setError(null);
-
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      clientSecret,
-      redirect: "if_required",
-      confirmParams: {
-        return_url: `${window.location.origin}/checkout`,
-      },
-    });
-
-    if (error) {
-      setError(error.message || "Payment failed. Please try another payment method.");
-      setLoading(false);
-      return;
-    }
-
-    if (
-      paymentIntent?.status === "succeeded" ||
-      paymentIntent?.status === "processing"
-    ) {
-      onSuccess(paymentIntent);
-    } else {
-      setError("Payment needs another step before the order can be confirmed.");
-    }
-
-    setLoading(false);
-  };
-
-  return (
-    <Stack spacing={3}>
-      <PaymentElement />
-      <Button
-        variant="contained"
-        size="large"
-        onClick={handleConfirm}
-        disabled={!stripe || loading}
-        startIcon={<LockRounded />}
-      >
-        {loading ? <CircularProgress size={24} /> : `Pay ${formatPrice(total)}`}
-      </Button>
-      <Typography variant="caption" color="text.secondary" textAlign="center">
-        Your payment details are encrypted and handled securely by Stripe.
-      </Typography>
-    </Stack>
-  );
-};
 
 const Checkout = () => {
   const dispatch = useDispatch();
@@ -125,7 +54,7 @@ const Checkout = () => {
   const [error, setError] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const [order, setOrder] = useState(null);
-  const [clientSecret, setClientSecret] = useState("");
+  const [requestKey] = useState(() => crypto.randomUUID());
   const [guestEmail, setGuestEmail] = useState("");
   const [shippingAddress, setShippingAddress] = useState({
     name: user?.name || "",
@@ -149,16 +78,16 @@ const Checkout = () => {
   });
 
   const totals = useMemo(() => {
-    const numericSubtotal = Number(subtotal) || 0;
-    const tax = Math.round(numericSubtotal * 0.08 * 100) / 100;
-    const shipping = numericSubtotal > 5000 ? 0 : 50;
+    const numericSubtotal = items.reduce((sum, item) => sum + Math.round(Number(item.current_price ?? item.price_at_added) * 100) * item.quantity, 0) / 100;
+    const tax = 0;
+    const shipping = 0;
     return {
       subtotal: numericSubtotal,
       tax,
       shipping,
       total: numericSubtotal + tax + shipping,
     };
-  }, [subtotal]);
+  }, [items]);
 
   useEffect(() => {
     if (!cart && !order) {
@@ -228,7 +157,7 @@ const Checkout = () => {
     setActiveStep((previous) => Math.max(previous - 1, 0));
   };
 
-  const handlePreparePayment = async () => {
+  const handleSubmitRequest = async () => {
     if (!validateDelivery()) {
       setActiveStep(1);
       return;
@@ -238,16 +167,12 @@ const Checkout = () => {
     setError(null);
 
     try {
-      if (!stripePromise) {
-        throw new Error("Card payments are not configured yet.");
-      }
-
       let activeOrder = order;
       if (!activeOrder) {
         const { data: createdOrder } = await ordersApi.createOrder({
-          shipping_address: shippingAddress,
+          shipping_address: { ...shippingAddress, phone: shippingAddress.phone || undefined },
           billing_address: billingAddress.sameAsShipping
-            ? shippingAddress
+            ? { ...shippingAddress, phone: shippingAddress.phone || undefined }
             : {
                 name: billingAddress.name,
                 street: billingAddress.street,
@@ -258,29 +183,20 @@ const Checkout = () => {
                 country: billingAddress.country,
               },
           guest_email: !user ? guestEmail.trim() : undefined,
-        });
+        }, requestKey);
         activeOrder = createdOrder;
         setOrder(createdOrder);
       }
 
-      const { data: intent } = await paymentsApi.createPaymentIntent({
-        order_id: activeOrder.id,
-        guest_email: !user ? guestEmail.trim() : undefined,
-        payment_method: "card",
-      });
-      setClientSecret(intent.client_secret);
+      handleRequestSuccess();
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.error ||
-          requestError.message ||
-          "Payment could not be initialized."
-      );
+      setError(getErrorMessage(requestError, "Your request could not be submitted. Please try again."));
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handleRequestSuccess = () => {
     dispatch(clearCartState());
     setActiveStep(steps.length - 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -317,7 +233,7 @@ const Checkout = () => {
               </Typography>
             </Box>
             <Typography variant="body2" fontWeight={700}>
-              {formatPrice(item.price_at_added * item.quantity)}
+              {formatPrice((item.current_price ?? item.price_at_added) * item.quantity)}
             </Typography>
           </Stack>
         ))}
@@ -329,20 +245,20 @@ const Checkout = () => {
           <Typography>{formatPrice(totals.subtotal)}</Typography>
         </Stack>
         <Stack direction="row" justifyContent="space-between">
-          <Typography color="text.secondary">Estimated tax</Typography>
-          <Typography>{formatPrice(totals.tax)}</Typography>
+          <Typography color="text.secondary">Tax</Typography>
+          <Typography>To be quoted</Typography>
         </Stack>
         <Stack direction="row" justifyContent="space-between">
-          <Typography color="text.secondary">Insured shipping</Typography>
+          <Typography color="text.secondary">Delivery</Typography>
           <Typography color={totals.shipping === 0 ? "success.main" : "inherit"}>
-            {totals.shipping === 0 ? "Free" : formatPrice(totals.shipping)}
+            To be quoted
           </Typography>
         </Stack>
       </Stack>
       <Divider />
       <Stack direction="row" justifyContent="space-between" sx={{ pt: 2 }}>
         <Typography variant="h6" fontWeight={700}>
-          Total
+          Watch subtotal
         </Typography>
         <Typography variant="h6" fontWeight={700}>
           {formatPrice(order?.total_amount ?? totals.total)}
@@ -353,12 +269,12 @@ const Checkout = () => {
 
   const renderDelivery = () => (
     <Paper sx={{ p: { xs: 2.5, md: 4 }, boxShadow: "none" }}>
-      <Typography variant="overline" color="secondary.main">Insured delivery</Typography>
+      <Typography variant="overline" color="secondary.main">Your details</Typography>
       <Typography variant="h4" sx={{ fontFamily: "Georgia, serif" }}>
         Delivery details
       </Typography>
       <Typography color="text.secondary" sx={{ mt: 0.75, mb: 3 }}>
-        We’ll use these details for insured delivery and order updates.
+        We’ll use these details to review delivery options for your request.
       </Typography>
       <Grid container spacing={2}>
         {!user && (
@@ -538,7 +454,7 @@ const Checkout = () => {
                   </Typography>
                 </Box>
                 <Typography fontWeight={700}>
-                  {formatPrice(item.price_at_added * item.quantity)}
+                  {formatPrice((item.current_price ?? item.price_at_added) * item.quantity)}
                 </Typography>
               </Stack>
             ))}
@@ -553,52 +469,15 @@ const Checkout = () => {
       return (
         <Paper sx={{ p: { xs: 2.5, md: 4 }, boxShadow: "none" }}>
           <Typography variant="overline" color="secondary.main">Final step</Typography>
-          <Typography variant="h4" sx={{ fontFamily: "Georgia, serif" }}>
-            Secure payment
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75, mb: 3 }}>
-            Your order is reserved when the secure payment form is initialized.
-          </Typography>
-          {!stripePromise && (
-            <Alert severity="warning">
-              Card payments are not configured. Add a Stripe publishable key to
-              enable live checkout.
-            </Alert>
-          )}
-          {stripePromise && !clientSecret && (
-            <Stack spacing={2}>
-              <Alert severity="info">
-                Continue to the secure payment form to complete your order.
-              </Alert>
-              <Button
-                variant="contained"
-                size="large"
-                onClick={handlePreparePayment}
-                disabled={loading}
-                startIcon={<LockRounded />}
-              >
-                {loading ? <CircularProgress size={24} /> : "Continue to payment"}
-              </Button>
-            </Stack>
-          )}
-          {stripePromise && clientSecret && (
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                appearance: { theme: "stripe" },
-              }}
-            >
-              <StripePaymentForm
-                clientSecret={clientSecret}
-                loading={loading}
-                onSuccess={handlePaymentSuccess}
-                setError={setError}
-                setLoading={setLoading}
-                total={order?.total_amount ?? totals.total}
-              />
-            </Elements>
-          )}
+          <Typography variant="h4">Submit your request</Typography>
+          <Alert severity="info" sx={{ my: 3 }}>
+            This is a request, not a completed purchase. No payment will be taken.
+            Availability, final pricing, delivery, and return terms need confirmation.
+            Submitting a request does not reserve a watch.
+          </Alert>
+          <Button variant="contained" size="large" onClick={handleSubmitRequest} disabled={loading}>
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Submit order request"}
+          </Button>
         </Paper>
       );
     }
@@ -609,10 +488,10 @@ const Checkout = () => {
           <CheckCircleRounded sx={{ fontSize: 46, color: "success.main" }} />
         </Box>
         <Typography variant="h3" gutterBottom>
-          Order confirmed
+          Request received
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
-          Thank you for shopping with Mechora.
+          No payment has been taken and no stock has been reserved.
         </Typography>
         {order?.order_number && (
           <Typography variant="h6" fontWeight={700} sx={{ mb: 3 }}>
@@ -620,8 +499,8 @@ const Checkout = () => {
           </Typography>
         )}
         <Typography color="text.secondary" sx={{ maxWidth: 520, mx: "auto", mb: 4 }}>
-          A receipt and delivery updates will be sent to{" "}
-          {user?.email || guestEmail || "your email address"}.
+          Save your reference number. Final availability, tax, delivery costs, and return terms
+          must be confirmed before you decide to purchase.
         </Typography>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center">
           {user && (
@@ -664,9 +543,9 @@ const Checkout = () => {
   return (
     <Box sx={{ py: { xs: 1, md: 3 } }}>
       <Box sx={{ mb: 4 }}>
-        <Typography variant="overline" color="secondary.main">Secure purchase</Typography>
+        <Typography variant="overline" color="secondary.main">Order request</Typography>
         <Typography variant="h2" sx={{ fontSize: { xs: "2.6rem", md: "4rem" } }}>
-          Complete your order
+          Request this selection
         </Typography>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -676,13 +555,13 @@ const Checkout = () => {
           <Stack direction="row" spacing={1} alignItems="center">
             <LockRounded fontSize="small" color="success" />
             <Typography variant="body2" color="text.secondary">
-              Secure payment
+              No payment taken
             </Typography>
           </Stack>
           <Stack direction="row" spacing={1} alignItems="center">
             <LocalShippingRounded fontSize="small" color="success" />
             <Typography variant="body2" color="text.secondary">
-              Fully insured delivery
+              Delivery quoted separately
             </Typography>
           </Stack>
         </Stack>
@@ -724,12 +603,12 @@ const Checkout = () => {
                 Back
               </Button>
               <Button variant="contained" size="large" onClick={handleNext}>
-                {activeStep === 0 ? "Continue to delivery" : "Continue to payment"}
+                {activeStep === 0 ? "Continue to your details" : "Review request"}
               </Button>
             </Stack>
           )}
           {activeStep === 2 && (
-            <Button variant="text" onClick={handleBack} sx={{ mt: 2 }}>
+            <Button variant="text" onClick={handleBack} disabled={loading} sx={{ mt: 2 }}>
               Back to delivery
             </Button>
           )}

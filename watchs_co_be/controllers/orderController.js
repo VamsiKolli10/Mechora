@@ -14,6 +14,7 @@ exports.createOrder = asyncHandler(async (req, res) => {
   const fullOrder = await orderService.createOrderFromCart(req.body, {
     userId,
     guestToken,
+    idempotencyKey: req.get("Idempotency-Key"),
   });
 
   res.status(201).json(fullOrder);

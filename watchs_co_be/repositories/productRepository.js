@@ -1,5 +1,26 @@
 const Watch = require("../models/watchesModel");
 
+// A request records current catalogue prices but does not reserve inventory.
+const snapshotAvailableItems = async (items, client) => {
+  const snapshots = [];
+  for (const item of [...items].sort((a, b) => a.watch_id - b.watch_id)) {
+    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 10) {
+      throw Object.assign(new Error("Invalid quantity"), { status: 400 });
+    }
+    const { rows } = await client.query(
+      `SELECT brand, model, reference, slug, sale_price FROM watches
+       WHERE id = $1 AND deleted_at IS NULL AND is_active = true
+         AND stock_status IN ('in_stock', 'low_stock') AND stock_quantity >= $2
+       FOR SHARE`, [item.watch_id, item.quantity]
+    );
+    if (!rows.length) throw Object.assign(new Error("A selected watch is no longer available"), { status: 409 });
+    const watch = rows[0];
+    snapshots.push({ watch_id: item.watch_id, quantity: item.quantity,
+      unit_price: Number(watch.sale_price), watch_snapshot: watch });
+  }
+  return snapshots;
+};
+
 const reserveInventory = async (items, client) => {
   const orderItems = [];
 
@@ -63,4 +84,5 @@ module.exports = {
   getRecommendedWatches: Watch.getRecommendedWatches,
   ensureSlugs: Watch.ensureSlugs,
   reserveInventory,
+  snapshotAvailableItems,
 };

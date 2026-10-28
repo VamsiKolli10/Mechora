@@ -7,9 +7,7 @@ http://localhost:8000/api
 
 ## Authentication
 
-Most endpoints support two authentication methods:
-1. **Bearer Token** (for authenticated users): `Authorization: Bearer <token>`
-2. **Guest Token** (for guest users): `x-guest-token: <token>` header or `?guest_token=<token>` query param
+Browser authentication uses HttpOnly access and refresh cookies. Bearer access tokens are also accepted. Guest carts use a signed guest cookie or the supported guest token header/query. Expired authenticated sessions return 401 so clients can refresh before selecting a cart owner.
 
 ---
 
@@ -36,6 +34,7 @@ Get current user's cart or guest cart.
       "watch_id": 1,
       "quantity": 2,
       "price_at_added": 5000.00,
+      "current_price": 5000.00,
       "brand": "Rolex",
       "model": "Submariner",
       "slug": "rolex-submariner-12345"
@@ -88,7 +87,7 @@ DELETE /api/cart
 ```
 POST /api/cart/merge
 ```
-Merge guest cart into user cart after login.
+Merge the signed guest cart into the authenticated cart after login. Repeated merges are safe. Overlapping quantities are combined, subject to current stock and the maximum of 10 per watch. A 409 leaves both carts intact; adjust the account cart and retry.
 
 **Body:**
 ```json
@@ -660,3 +659,16 @@ All endpoints return errors in the following format:
 - `401` - Unauthorized
 - `404` - Not Found
 - `500` - Internal Server Error
+
+
+## Session security and provider identities
+
+`GET /api/users/me` returns `{ "user": ... }` using the saved profile. Profile and administrator user responses omit password hashes, tokens, MFA secrets, and session versions.
+
+`POST /api/auth/supabase-session` accepts `{ "access_token": "provider access token", "mfa_code": "optional six-digit code" }`. The backend verifies the confirmed provider identity. Accounts with app MFA return `{ "requires_mfa": true, "message": "..." }` until a valid code is supplied; no application cookies are issued for that challenge. Local login follows the same MFA challenge contract. Provider-linked accounts authenticate through Supabase.
+
+`POST /api/auth/supabase-revoke` accepts `{ "access_token": "provider access token" }` and revokes that identity's application sessions. The password-recovery UI calls it after updating the provider password, then signs out. It does not establish a session.
+
+Password changes, password resets, MFA changes, and logout revoke existing application access and refresh sessions. Recovery and verification endpoints accept the original emailed token only, never its stored hash. Refresh rotates to a unique token and rejects replay.
+
+Local profile email changes reset verification and return `verification_sent` to indicate delivery. Provider-linked email changes must use Supabase's confirmed email-update flow; the frontend synchronizes the confirmed address at the next session check. An enabled MFA factor cannot be replaced using setup; disabling it requires its current code.

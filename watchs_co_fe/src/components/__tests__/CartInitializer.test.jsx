@@ -1,0 +1,32 @@
+import { StrictMode } from "react";
+import { act, render, waitFor } from "@testing-library/react";
+import { Provider } from "react-redux";
+import { configureStore } from "@reduxjs/toolkit";
+import { vi } from "vitest";
+import CartInitializer from "../CartInitializer";
+import authReducer, { logoutUser } from "@/features/auth/authSlice";
+import cartReducer from "@/features/cart/cartSlice";
+import wishlistReducer, { addToWishlist } from "@/features/wishlist/wishlistSlice";
+import { cartApi } from "@/services/cartApi";
+import { authApi } from "@/services/authApi";
+vi.mock("@/services/cartApi", () => ({ cartApi: { getCart: vi.fn(), mergeCart: vi.fn() } }));
+vi.mock("@/services/authApi", () => ({ authApi: { logout: vi.fn() } }));
+vi.mock("@/utils/api", () => ({ default: { post: vi.fn().mockResolvedValue({}) } }));
+beforeEach(() => vi.clearAllMocks());
+
+it("merges the signed-in bag once in Strict Mode and clears private state on logout", async () => {
+  cartApi.mergeCart.mockResolvedValue({ data: { id: 1, items: [{ id: 1, watch_id: 5, quantity: 2 }], item_count: 2 } });
+  cartApi.getCart.mockResolvedValue({ data: { id: 2, items: [], item_count: 0 } });
+  authApi.logout.mockResolvedValue({});
+  const auth = { ...authReducer(undefined, { type: "init" }), user: { id: 1 }, status: "succeeded" };
+  const store = configureStore({ reducer: { auth: authReducer, cart: cartReducer, wishlist: wishlistReducer }, preloadedState: { auth } });
+  render(<StrictMode><Provider store={store}><CartInitializer /></Provider></StrictMode>);
+  await waitFor(() => expect(store.getState().cart.itemCount).toBe(2));
+  expect(cartApi.mergeCart).toHaveBeenCalledOnce();
+  await act(async () => { await store.dispatch(addToWishlist(5)); });
+  expect(store.getState().wishlist.wishlistStatus[5]).toBe(true);
+  await act(async () => { await store.dispatch(logoutUser()); });
+  await waitFor(() => expect(cartApi.getCart).toHaveBeenCalledOnce());
+  expect(store.getState().wishlist.wishlistStatus).toEqual({});
+  expect(store.getState().cart.items).toEqual([]);
+});

@@ -23,14 +23,15 @@ import { Link as RouterLink, Outlet, useLocation, useNavigate } from "react-rout
 import MiniCart from "@/components/MiniCart";
 import ThemeToggle from "@/components/ThemeToggle";
 import useAuth from "@/hooks/useAuth";
+import ScrollToLocation from "@/components/ScrollToLocation";
 
 const DRAWER_WIDTH = 304;
 
 const navigation = [
   { label: "Watches", to: "/shop" },
   { label: "New arrivals", to: "/shop?sort_by=created_at&sort_order=DESC" },
-  { label: "Ready to ship", to: "/shop?stock_status=in_stock" },
-  { label: "Private sourcing", to: "/#concierge" },
+  { label: "In stock", to: "/shop?stock_status=in_stock" },
+  { label: "How it works", to: "/#how-it-works" },
 ];
 
 const BrandMark = () => (
@@ -154,6 +155,7 @@ const ResponsiveLayout = () => {
 
   return (
     <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+      <ScrollToLocation />
       <AppBar
         position="sticky"
         elevation={0}
@@ -275,12 +277,12 @@ const ResponsiveLayout = () => {
             <Box>
               <BrandMark />
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1.25, maxWidth: 360 }}>
-                Exceptional watches, independently authenticated and delivered with care.
+                Mechanical watches to discover, compare, and request.
               </Typography>
             </Box>
             <Stack direction="row" spacing={{ xs: 2, sm: 4 }} flexWrap="wrap" useFlexGap>
               <Button component={RouterLink} to="/shop" color="inherit" size="small">Shop</Button>
-              <Button component={RouterLink} to="/#concierge" color="inherit" size="small">Concierge</Button>
+              <Button component={RouterLink} to="/#how-it-works" color="inherit" size="small">How it works</Button>
               <Button component={RouterLink} to="/account/orders" color="inherit" size="small">Orders</Button>
             </Stack>
             <Typography variant="caption" color="text.secondary">

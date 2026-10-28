@@ -100,7 +100,7 @@ const MiniCart = () => {
                             Qty: {item.quantity}
                           </Typography>
                           <Typography variant="body2" color="primary" sx={{ mt: 0.5 }}>
-                            {formatPrice(item.price_at_added * item.quantity)}
+                            {formatPrice((item.current_price ?? item.price_at_added) * item.quantity)}
                           </Typography>
                         </Box>
                         <IconButton

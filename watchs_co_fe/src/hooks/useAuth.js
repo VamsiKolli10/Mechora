@@ -21,7 +21,7 @@ const useAuth = ({ redirectTo = null, protectedOnly = false } = {}) => {
 
   const logout = useMemo(
     () => () => {
-      dispatch(logoutUser());
+      return dispatch(logoutUser());
     },
     [dispatch]
   );

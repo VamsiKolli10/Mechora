@@ -6,6 +6,11 @@ const { query } = require("../db");
 const bcrypt = require("bcryptjs");
 const { authenticator } = require("otplib");
 const { validatePassword } = require("../middleware/passwordValidator");
+const { sanitizeUser } = require("../utils/userPayload");
+const { clearSessionCookies } = require("../utils/sessionCookies");
+const { generateEmailVerificationToken, hashToken } = require("../utils/tokenUtils");
+const { sendEmailVerificationEmail } = require("../utils/mailer");
+const logger = require("../utils/logger");
 
 // Get user profile
 exports.getProfile = async (req, res) => {
@@ -18,15 +23,9 @@ exports.getProfile = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Remove sensitive fields
-    delete user.password;
-    delete user.refresh_token;
-    delete user.password_reset_token;
-    delete user.mfa_secret;
-
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -44,21 +43,36 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ error: "No fields to update" });
     }
 
-    const result = await UserModel.updateUser(userId, updates);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "User not found" });
+    const current = (await UserModel.getUserById(userId)).rows[0];
+    if (!current) return res.status(404).json({ error: "User not found" });
+    if (current.supabase_user_id && email !== undefined && email.toLowerCase() !== current.email.toLowerCase()) {
+      return res.status(409).json({ error: "Confirm this email change with your identity provider first." });
     }
-
-    const user = result.rows[0];
-    delete user.password;
-    delete user.refresh_token;
-
-    res.json(user);
+    let verificationToken;
+    if (!current.supabase_user_id && email !== undefined &&
+        (email.toLowerCase() !== current.email.toLowerCase() || !current.email_verified)) {
+      verificationToken = generateEmailVerificationToken();
+      updates.email_verified = false;
+      updates.email_verification_token = hashToken(verificationToken);
+    }
+    const result = await UserModel.updateUser(userId, updates);
+    if (!result.rows.length) return res.status(404).json({ error: "User not found" });
+    let verificationSent;
+    if (verificationToken) {
+      try {
+        await sendEmailVerificationEmail(result.rows[0].email, verificationToken);
+        verificationSent = true;
+      } catch (error) {
+        verificationSent = false;
+        logger.error("Profile verification email failed", { message: error.message });
+      }
+    }
+    res.json({ ...sanitizeUser(result.rows[0]), verification_sent: verificationSent });
   } catch (err) {
     if (err.code === "23505") {
       return res.status(400).json({ error: "Email already exists" });
     }
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -89,6 +103,7 @@ exports.changePassword = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    if (user.supabase_user_id) return res.status(400).json({ error: "Change your password with your identity provider." });
     const passwordValid = await bcrypt.compare(current_password, user.password);
     if (!passwordValid) {
       return res.status(401).json({ error: "Current password is incorrect" });
@@ -98,16 +113,20 @@ exports.changePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(new_password, 12);
 
     // Update password
-    await query(
+    const changed = await query(
       `UPDATE users 
-       SET password = $1, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $2`,
-      [hashedPassword, userId]
+       SET password = $1, refresh_token = NULL, session_version = session_version + 1,
+           password_reset_token = NULL, password_reset_expires = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND password = $3 RETURNING id`,
+      [hashedPassword, userId, user.password]
     );
 
-    res.json({ message: "Password changed successfully" });
+    if (!changed.rows.length) return res.status(409).json({ error: "Password has changed. Please sign in again." });
+    clearSessionCookies(res);
+    res.json({ message: "Password changed successfully. Please sign in again." });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -118,7 +137,7 @@ exports.getAddresses = async (req, res) => {
     const addresses = await Address.getUserAddresses(userId);
     res.json(addresses);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -129,7 +148,7 @@ exports.createAddress = async (req, res) => {
     const address = await Address.createAddress({ ...req.body, user_id: userId });
     res.status(201).json(address);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -146,7 +165,7 @@ exports.updateAddress = async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -163,7 +182,7 @@ exports.deleteAddress = async (req, res) => {
 
     res.json({ message: "Address deleted successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -175,7 +194,7 @@ exports.setDefaultAddress = async (req, res) => {
     const address = await Address.setDefaultAddress(addressId, userId);
     res.json(address);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -186,7 +205,7 @@ exports.getPaymentMethods = async (req, res) => {
     const paymentMethods = await PaymentMethod.getUserPaymentMethods(userId);
     res.json(paymentMethods);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -202,7 +221,7 @@ exports.createPaymentMethod = async (req, res) => {
     });
     res.status(201).json(paymentMethod);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -220,7 +239,7 @@ exports.deletePaymentMethod = async (req, res) => {
 
     res.json({ message: "Payment method deleted successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -232,7 +251,7 @@ exports.setDefaultPaymentMethod = async (req, res) => {
     const paymentMethod = await PaymentMethod.setDefaultPaymentMethod(paymentMethodId, userId);
     res.json(paymentMethod);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -249,7 +268,7 @@ exports.getOrderHistory = async (req, res) => {
     const result = await Order.getUserOrders(userId, options);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -266,7 +285,7 @@ exports.getOrderDetails = async (req, res) => {
 
     res.json(order);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -281,9 +300,13 @@ exports.initiateMfaSetup = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    if (user.mfa_enabled) {
+      return res.status(409).json({ error: "Disable your existing MFA with a valid code before setting it up again." });
+    }
+
     const secret = authenticator.generateSecret();
     await query(
-      `UPDATE users SET mfa_secret = $1, mfa_enabled = false, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      `UPDATE users SET mfa_secret = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND mfa_enabled = false`,
       [secret, userId]
     );
 
@@ -294,7 +317,7 @@ exports.initiateMfaSetup = async (req, res) => {
       otpauth_url: otpauthUrl,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -315,14 +338,18 @@ exports.enableMfa = async (req, res) => {
       return res.status(400).json({ error: "Invalid MFA code" });
     }
 
-    await query(
-      `UPDATE users SET mfa_enabled = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [userId]
+    const changed = await query(
+      `UPDATE users SET mfa_enabled = true, refresh_token = NULL,
+         session_version = session_version + 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND mfa_secret = $2 AND mfa_enabled = false RETURNING id`,
+      [userId, user.mfa_secret]
     );
 
-    res.json({ message: "MFA enabled" });
+    if (!changed.rows.length) return res.status(409).json({ error: "MFA setup has changed. Please try again." });
+    clearSessionCookies(res);
+    res.json({ message: "MFA enabled. Please sign in again." });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -343,15 +370,18 @@ exports.disableMfa = async (req, res) => {
       return res.status(400).json({ error: "Invalid MFA code" });
     }
 
-    await query(
+    const changed = await query(
       `UPDATE users 
-         SET mfa_enabled = false, mfa_secret = NULL, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $1`,
-      [userId]
+         SET mfa_enabled = false, mfa_secret = NULL, refresh_token = NULL,
+           session_version = session_version + 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND mfa_secret = $2 AND mfa_enabled = true RETURNING id`,
+      [userId, user.mfa_secret]
     );
 
-    res.json({ message: "MFA disabled" });
+    if (!changed.rows.length) return res.status(409).json({ error: "MFA has changed. Please try again." });
+    clearSessionCookies(res);
+    res.json({ message: "MFA disabled. Please sign in again." });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };

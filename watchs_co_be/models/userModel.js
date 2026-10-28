@@ -1,4 +1,5 @@
 const { query } = require("../db");
+const resolveQuery = (client) => client ? client.query.bind(client) : query;
 
 // GET all users
 const getAllUsers = () => {
@@ -18,12 +19,12 @@ const createUser = ({
   role = "customer",
   supabaseUserId = null,
   emailVerified = false,
-}) => {
-  return query(
+}, client = null) => {
+  return resolveQuery(client)(
     `INSERT INTO users
        (name, password, email, branch_id, role, supabase_user_id, email_verified)
      VALUES (TRIM($1), $2, LOWER(TRIM($3)), $4, $5, $6, $7)
-     RETURNING id, supabase_user_id, name, email, role, email_verified, mfa_enabled`,
+     RETURNING id, supabase_user_id, name, email, role, email_verified, mfa_enabled, session_version`,
     [name, hashedPassword, email, 1, role, supabaseUserId, emailVerified]
   );
 };
@@ -33,18 +34,23 @@ const updateUser = (id, updates) => {
   const fields = Object.keys(updates);
   const values = Object.values(updates);
   
-  // Handle email and name with LOWER(TRIM())
+  // Normalize editable identity fields while preserving name capitalization.
   const setParts = fields.map((field, index) => {
-    if (field === "email" || field === "name") {
+    if (field === "email") {
       return `${field} = LOWER(TRIM($${index + 1}))`;
     }
+    if (field === "name") return `${field} = TRIM($${index + 1})`;
     return `${field} = $${index + 1}`;
   });
+  if (fields.includes("password")) {
+    setParts.push("refresh_token = NULL", "session_version = session_version + 1",
+      "password_reset_token = NULL", "password_reset_expires = NULL");
+  }
   
   const setString = setParts.join(", ");
   const queryText = `UPDATE users SET ${setString}, updated_at = CURRENT_TIMESTAMP 
                      WHERE id = $${fields.length + 1} 
-                     RETURNING id, name, email, role, created_at, updated_at, email_verified, mfa_enabled`;
+                     RETURNING id, supabase_user_id, name, email, role, created_at, updated_at, email_verified, mfa_enabled`;
   return query(queryText, [...values, id]);
 };
 
@@ -55,7 +61,7 @@ const deleteUser = (id) => {
 
 // FIND user by email
 const findUserByEmail = (email) => {
-  return query("SELECT * FROM users WHERE email = $1", [email]);
+  return query("SELECT * FROM users WHERE LOWER(email::text) = LOWER(TRIM($1)) AND deleted_at IS NULL", [email]);
 };
 
 const findUserBySupabaseId = (supabaseUserId) =>

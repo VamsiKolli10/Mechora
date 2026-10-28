@@ -68,7 +68,8 @@ const searchProducts = async (searchTerm, { page = 1, limit = 20 } = {}) => {
     pagination: {
       page,
       limit,
-      total: result.rows.length,
+      total: result.total,
+      totalPages: result.totalPages,
     },
   };
 };
@@ -95,4 +96,5 @@ module.exports = {
   searchProducts,
   updateProduct,
   reserveInventory,
+  snapshotAvailableItems: productRepository.snapshotAvailableItems,
 };

@@ -13,6 +13,7 @@ const generateAccessToken = (payload) => {
 const generateRefreshToken = (payload) => {
   return jwt.sign(payload, config.jwt.refreshSecret, {
     expiresIn: config.jwt.refreshTtl,
+    jwtid: crypto.randomUUID(),
   });
 };
 

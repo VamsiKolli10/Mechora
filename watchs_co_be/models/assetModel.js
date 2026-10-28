@@ -36,6 +36,10 @@ const createAsset = ({
 // UPDATE asset
 const updateAsset = (id, updates) => {
   const fields = Object.keys(updates);
+  const allowed = new Set(["watch_id", "url", "type", "alt_text", "sort_order", "width", "height", "file_size", "mime_type"]);
+  if (!fields.length || fields.some(field => !allowed.has(field))) {
+    throw Object.assign(new Error("Invalid asset fields"), { status: 400 });
+  }
   const values = Object.values(updates);
   const setString = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
   const queryText = `UPDATE assets SET ${setString}, updated_at = CURRENT_TIMESTAMP 

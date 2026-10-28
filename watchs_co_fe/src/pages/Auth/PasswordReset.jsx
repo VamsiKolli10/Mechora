@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 import api from "@/utils/api";
+import { getErrorMessage } from "@/utils/errors";
 import { isSupabaseAuthConfigured, supabase } from "@/services/supabaseClient";
 
 const PasswordReset = () => {
@@ -25,6 +26,7 @@ const PasswordReset = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [providerPasswordChanged, setProviderPasswordChanged] = useState(false);
 
   const handleRequestReset = async (e) => {
     e.preventDefault();
@@ -44,7 +46,7 @@ const PasswordReset = () => {
       }
       setSuccess("If the email exists, a password reset link has been sent.");
     } catch (err) {
-      setError(err.response?.data?.error || err.message || "Failed to send reset email");
+      setError(getErrorMessage(err, "Failed to send reset email"));
     } finally {
       setLoading(false);
     }
@@ -71,16 +73,22 @@ const PasswordReset = () => {
 
     try {
       if (isSupabaseAuthConfigured) {
-        await supabase.auth.updateUser({ password }).then(({ error }) => {
+        if (!providerPasswordChanged) {
+          const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
-        });
+          setProviderPasswordChanged(true);
+        }
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session) throw error || new Error("Your recovery session expired. Please request another link.");
+        await api.post("/api/auth/supabase-revoke", { access_token: data.session.access_token });
         await supabase.auth.signOut();
       } else {
         await api.post("/api/auth/password-reset", { token, password });
       }
+      window.dispatchEvent(new Event("mechora:session-expired"));
       setSuccess("Password reset successfully. You can now login with your new password.");
     } catch (err) {
-      setError(err.response?.data?.error || err.message || "Failed to reset password");
+      setError(getErrorMessage(err, "Failed to reset password"));
     } finally {
       setLoading(false);
     }

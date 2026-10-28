@@ -14,7 +14,7 @@ router.post(
 );
 router.get(
   "/number/:orderNumber",
-  optionalAuth,
+  requireAuth,
   validateRequest(orderSchemas.getOrderByNumber),
   orderController.getOrderByNumber
 );
@@ -23,7 +23,7 @@ router.get(
 router.get("/", requireAuth, orderController.getUserOrders);
 router.get(
   "/:orderId",
-  optionalAuth,
+  requireAuth,
   validateRequest(orderSchemas.getOrder),
   orderController.getOrder
 );

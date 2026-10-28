@@ -6,7 +6,7 @@ exports.getAssetsByWatchId = async (req, res) => {
     const result = await Asset.getAssetsByWatchId(watchId);
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -19,7 +19,7 @@ exports.getAssetById = async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -28,7 +28,7 @@ exports.createAsset = async (req, res) => {
     const result = await Asset.createAsset(req.body);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -41,7 +41,7 @@ exports.updateAsset = async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -54,7 +54,7 @@ exports.deleteAsset = async (req, res) => {
     }
     res.json({ message: "Asset deleted successfully", asset: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 

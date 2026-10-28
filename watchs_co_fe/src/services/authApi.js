@@ -1,10 +1,11 @@
 import api from "@/utils/api";
 import { supabase, isSupabaseAuthConfigured } from "./supabaseClient";
 
-const exchangeSession = async (session) => {
+const exchangeSession = async (session, mfaCode) => {
   if (!session?.access_token) return { data: { user: null, session: null } };
   const { data } = await api.post("/api/auth/supabase-session", {
     access_token: session.access_token,
+    ...(mfaCode ? { mfa_code: mfaCode } : {}),
   });
   return { data };
 };
@@ -12,7 +13,15 @@ const exchangeSession = async (session) => {
 export const authApi = {
   async getCurrentUser() {
     try {
-      return await api.get("/api/users/me");
+      const response = await api.get("/api/users/me", { skipSessionExpiredNotification: true });
+      if (isSupabaseAuthConfigured && response.data.user?.auth_provider === "supabase") {
+        const { data, error } = await supabase.auth.getSession();
+        const email = data?.session?.user?.email;
+        if (!error && email && email.toLowerCase() !== response.data.user.email.toLowerCase()) {
+          return exchangeSession(data.session);
+        }
+      }
+      return response;
     } catch (apiError) {
       if (!isSupabaseAuthConfigured || apiError.response?.status !== 401) {
         throw apiError;
@@ -25,9 +34,9 @@ export const authApi = {
   },
   login(credentials) {
     if (isSupabaseAuthConfigured) {
-      return supabase.auth.signInWithPassword(credentials).then(({ data, error }) => {
+      return supabase.auth.signInWithPassword({ email: credentials.email, password: credentials.password }).then(({ data, error }) => {
         if (error) throw error;
-        return exchangeSession(data.session);
+        return exchangeSession(data.session, credentials.mfa_code);
       });
     }
     return api.post("/api/auth/login", credentials);

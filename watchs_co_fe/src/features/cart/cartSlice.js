@@ -1,163 +1,83 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { cartApi } from "@/services/cartApi";
 import { getErrorMessage } from "@/utils/errors";
+import { selectSessionKey } from "@/utils/sessionIdentity";
 
-export const fetchCart = createAsyncThunk(
-  "cart/fetchCart",
-  async (_, { rejectWithValue }) => {
-    try {
-      const { data } = await cartApi.getCart();
-      return data;
-    } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Failed to fetch cart"));
-    }
-  }
-);
-
-export const addToCart = createAsyncThunk(
-  "cart/addToCart",
-  async ({ watch_id, quantity = 1 }, { rejectWithValue }) => {
-    try {
-      const { data } = await cartApi.addItem({ watch_id, quantity });
-      return data;
-    } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Failed to add to cart"));
-    }
-  }
-);
-
-export const updateCartItem = createAsyncThunk(
-  "cart/updateCartItem",
-  async ({ itemId, quantity }, { rejectWithValue }) => {
-    try {
-      const { data } = await cartApi.updateItem({ itemId, quantity });
-      return data;
-    } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Failed to update cart item"));
-    }
-  }
-);
-
-export const removeFromCart = createAsyncThunk(
-  "cart/removeFromCart",
-  async (itemId, { rejectWithValue }) => {
-    try {
-      const { data } = await cartApi.removeItem(itemId);
-      return data;
-    } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Failed to remove from cart"));
-    }
-  }
-);
-
-export const clearCart = createAsyncThunk(
-  "cart/clearCart",
-  async (_, { rejectWithValue }) => {
-    try {
-      await cartApi.clearCart();
-      return null;
-    } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Failed to clear cart"));
-    }
-  }
-);
-
-export const mergeCart = createAsyncThunk(
-  "cart/mergeCart",
-  async (_, { getState, rejectWithValue }) => {
-    try {
-      const state = getState();
-      if (!state.auth?.user) {
-        return rejectWithValue("Authentication required");
+// Keep cart mutations and the snapshots they return in a single client-side order.
+let requests = Promise.resolve();
+const createCartRequest = (name, request, fallback, initialize = false) => createAsyncThunk(
+  `cart/${name}`,
+  async (input, { getState, fulfillWithValue, rejectWithValue }) => {
+    const ownerKey = selectSessionKey(getState());
+    const operation = requests.then(async () => {
+      if (ownerKey !== selectSessionKey(getState()) || getState().auth?.authStatus === "loading") {
+        throw new Error("Session changed");
       }
-
-      const { data } = await cartApi.mergeCart();
+      const { data } = await request(input);
       return data;
+    });
+    requests = operation.catch(() => {});
+    try {
+      const data = await operation;
+      if (ownerKey !== selectSessionKey(getState())) throw new Error("Session changed");
+      return fulfillWithValue(data, { ownerKey });
     } catch (error) {
-      return rejectWithValue(getErrorMessage(error, "Failed to merge cart"));
+      return rejectWithValue(getErrorMessage(error, fallback), { ownerKey });
     }
-  }
+  },
+  { condition: (_, { getState }) => !initialize || !getState().cart.loading }
 );
+
+export const fetchCart = createCartRequest("fetchCart", () => cartApi.getCart(), "Failed to fetch cart", true);
+export const addToCart = createCartRequest("addToCart", ({ watch_id, quantity = 1 }) => cartApi.addItem({ watch_id, quantity }), "Failed to add to cart");
+export const updateCartItem = createCartRequest("updateCartItem", item => cartApi.updateItem(item), "Failed to update cart item");
+export const removeFromCart = createCartRequest("removeFromCart", id => cartApi.removeItem(id), "Failed to remove cart item");
+export const clearCart = createCartRequest("clearCart", () => cartApi.clearCart(), "Failed to clear cart");
+export const mergeCart = createCartRequest("mergeCart", () => cartApi.mergeCart(), "Failed to merge cart", true);
 
 const initialState = {
-  cart: null,
-  items: [],
-  subtotal: 0,
-  itemCount: 0,
-  loading: false,
-  error: null,
+  cart: null, items: [], subtotal: 0, itemCount: 0, loading: false, error: null,
+  ownerKey: "guest:0", pending: {}, mergeError: null,
 };
-
+const reset = (ownerKey) => ({ ...initialState, pending: {}, ownerKey });
 const cartSlice = createSlice({
-  name: "cart",
-  initialState,
+  name: "cart", initialState,
   reducers: {
-    clearCartState: (state) => {
-      state.cart = null;
-      state.items = [];
-      state.subtotal = 0;
-      state.itemCount = 0;
+    clearCartState: (state, action) => {
+      const ownerKey = action.payload?.ownerKey ?? state.ownerKey;
+      if (action.payload && ownerKey === state.ownerKey) return;
+      return reset(ownerKey);
     },
   },
   extraReducers: (builder) => {
-    builder
-      .addCase(fetchCart.pending, (state) => {
+    [fetchCart, addToCart, updateCartItem, removeFromCart, clearCart, mergeCart].forEach(thunk => {
+      builder.addCase(thunk.pending, (state, action) => {
+        state.pending[action.meta.requestId] = true;
         state.loading = true;
         state.error = null;
-      })
-      .addCase(fetchCart.fulfilled, (state, action) => {
-        state.loading = false;
-        state.cart = action.payload;
-        state.items = action.payload?.items || [];
-        state.subtotal = action.payload?.subtotal || 0;
-        state.itemCount = action.payload?.item_count || 0;
-      })
-      .addCase(fetchCart.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(addToCart.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(addToCart.fulfilled, (state, action) => {
-        state.loading = false;
-        state.cart = action.payload;
-        state.items = action.payload?.items || [];
-        state.subtotal = action.payload?.subtotal || 0;
-        state.itemCount = action.payload?.item_count || 0;
-      })
-      .addCase(addToCart.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(updateCartItem.fulfilled, (state, action) => {
-        state.cart = action.payload;
-        state.items = action.payload?.items || [];
-        state.subtotal = action.payload?.subtotal || 0;
-        state.itemCount = action.payload?.item_count || 0;
-      })
-      .addCase(removeFromCart.fulfilled, (state, action) => {
-        state.cart = action.payload;
-        state.items = action.payload?.items || [];
-        state.subtotal = action.payload?.subtotal || 0;
-        state.itemCount = action.payload?.item_count || 0;
-      })
-      .addCase(clearCart.fulfilled, (state) => {
-        state.cart = null;
-        state.items = [];
-        state.subtotal = 0;
-        state.itemCount = 0;
-      })
-      .addCase(mergeCart.fulfilled, (state, action) => {
-        state.cart = action.payload;
-        state.items = action.payload?.items || [];
-        state.subtotal = action.payload?.subtotal || 0;
-        state.itemCount = action.payload?.item_count || 0;
+        if (thunk === mergeCart) state.mergeError = null;
       });
+      builder.addCase(thunk.fulfilled, (state, action) => {
+        if (action.meta.ownerKey !== state.ownerKey || !state.pending[action.meta.requestId]) return;
+        delete state.pending[action.meta.requestId];
+        state.loading = Object.keys(state.pending).length > 0;
+        const cart = thunk === clearCart ? null : action.payload;
+        state.cart = cart;
+        state.items = cart?.items || [];
+        state.subtotal = cart?.subtotal || 0;
+        state.itemCount = cart?.item_count || 0;
+        if (thunk === mergeCart) state.mergeError = null;
+      });
+      builder.addCase(thunk.rejected, (state, action) => {
+        if (action.meta.ownerKey !== state.ownerKey || !state.pending[action.meta.requestId]) return;
+        delete state.pending[action.meta.requestId];
+        state.loading = Object.keys(state.pending).length > 0;
+        state.error = action.payload || action.error.message;
+        if (thunk === mergeCart) state.mergeError = state.error;
+      });
+    });
   },
 });
-
 export const { clearCartState } = cartSlice.actions;
-export const selectCart = (state) => state.cart;
+export const selectCart = state => state.cart;
 export default cartSlice.reducer;

@@ -11,6 +11,8 @@ import {
   CircularProgress,
 } from "@mui/material";
 import api from "@/utils/api";
+import { getErrorMessage } from "@/utils/errors";
+import { supabase } from "@/services/supabaseClient";
 import { fetchCurrentUser } from "@/features/auth/authSlice";
 
 const AccountProfile = () => {
@@ -44,11 +46,21 @@ const AccountProfile = () => {
     setSuccess("");
 
     try {
-      await api.put("/api/account/profile", formData);
-      setSuccess("Profile updated successfully");
-      dispatch(fetchCurrentUser());
+      const providerEmailChange = user.auth_provider === "supabase" && formData.email.toLowerCase() !== user.email.toLowerCase();
+      if (providerEmailChange && !supabase) throw new Error("Your identity provider is not configured. Please contact support to change your email.");
+      if (providerEmailChange) {
+        const { error } = await supabase.auth.updateUser({ email: formData.email });
+        if (error) throw error;
+      }
+      const { data } = await api.put("/api/account/profile", providerEmailChange ? { name: formData.name } : formData);
+      setSuccess(providerEmailChange
+        ? `Profile saved. Follow the confirmation emails to change your sign-in email to ${formData.email}.`
+        : data.verification_sent === false
+          ? "Profile saved, but the verification email could not be sent. Save again to retry."
+          : data.verification_sent ? "Profile saved. Check your email to verify your address." : "Profile updated successfully");
+      await dispatch(fetchCurrentUser());
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to update profile");
+      setError(getErrorMessage(err, "Failed to update profile"));
     } finally {
       setLoading(false);
     }

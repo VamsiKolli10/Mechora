@@ -14,7 +14,7 @@ const addressSchema = z
     state: z.string().trim().min(1).max(255),
     zip: z.string().trim().min(2).max(20),
     country: z.string().trim().min(2).max(2).default("US"),
-    phone: z.string().trim().min(7).max(20).optional(),
+    phone: z.string().trim().min(7).max(20).nullable().optional(),
   })
   .strict();
 
@@ -70,6 +70,12 @@ const paymentMethodSchema = z
   .strict();
 
 const authSchemas = {
+  supabaseSession: {
+    body: z.object({
+      access_token: z.string().min(1).max(16384),
+      mfa_code: z.string().regex(/^\d{6}$/).optional(),
+    }).strict(),
+  },
   login: {
     body: z
       .object({
@@ -182,8 +188,8 @@ const accountSchemas = {
   createAddress: {
     body: addressSchema
       .extend({
-        label: z.string().trim().max(50).optional(),
-        type: z.enum(["shipping", "billing"]).optional(),
+        label: z.string().trim().max(50).nullable().optional(),
+        type: z.enum(["shipping", "billing", "both"]).optional(),
         is_default: z.boolean().optional(),
       })
       .strict(),
@@ -192,11 +198,12 @@ const accountSchemas = {
     params: z.object({ addressId: numberId() }).strict(),
     body: addressSchema
       .extend({
-        label: z.string().trim().max(50).optional(),
-        type: z.enum(["shipping", "billing"]).optional(),
+        label: z.string().trim().max(50).nullable().optional(),
+        type: z.enum(["shipping", "billing", "both"]).optional(),
         is_default: z.boolean().optional(),
       })
       .partial()
+      .extend({ country: addressSchema.shape.country.removeDefault().optional() })
       .strict(),
   },
   paymentMethod: {
@@ -257,6 +264,22 @@ const watchSchemas = {
   delete: {
     params: z.object({ id: numberId() }).strict(),
   },
+};
+
+const assetBody = z.object({
+  watch_id: numberId(),
+  url: z.string().trim().min(1).max(2048),
+  type: z.enum(["image", "thumbnail", "video", "document"]),
+  alt_text: z.string().trim().max(500).nullable().optional(),
+  sort_order: z.coerce.number().int().optional(),
+  width: z.coerce.number().int().positive().nullable().optional(),
+  height: z.coerce.number().int().positive().nullable().optional(),
+  file_size: z.coerce.number().int().nonnegative().nullable().optional(),
+  mime_type: z.string().trim().max(100).nullable().optional(),
+}).strict();
+const assetSchemas = {
+  create: { body: assetBody.extend({ type: assetBody.shape.type.default("image") }) },
+  update: { params: z.object({ id: numberId() }).strict(), body: assetBody.partial().refine(value => Object.keys(value).length > 0, "No fields to update") },
 };
 
 const brandSchemas = {
@@ -393,6 +416,7 @@ module.exports = {
   accountSchemas,
   watchSchemas,
   brandSchemas,
+  assetSchemas,
   collectionSchemas,
   wishlistSchemas,
   paymentSchemas,

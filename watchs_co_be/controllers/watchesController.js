@@ -134,7 +134,8 @@ exports.searchWatches = async (req, res) => {
       pagination: {
         page,
         limit,
-        total: result.rows.length,
+        total: result.total,
+        totalPages: result.totalPages,
       },
     });
   } catch (err) {

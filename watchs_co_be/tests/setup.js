@@ -8,6 +8,11 @@ process.env.JWT_REFRESH_SECRET = "test_refresh_secret";
 process.env.GUEST_TOKEN_SECRET = "test_guest_secret";
 process.env.COOKIE_SECRET = "test_cookie_secret";
 process.env.CLIENT_ORIGIN = "http://localhost:5173";
+process.env.SUPABASE_URL = "";
+process.env.SUPABASE_ANON_KEY = "";
+process.env.STRIPE_SECRET_KEY = "";
+process.env.STRIPE_WEBHOOK_SECRET = "";
+process.env.EMAIL_DELIVERY = "log";
 
 // Mock console methods to reduce noise in tests
 global.console = {

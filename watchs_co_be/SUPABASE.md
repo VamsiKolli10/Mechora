@@ -1,6 +1,6 @@
 # Supabase PostgreSQL setup
 
-The application continues to use Express for authentication and business logic. Supabase is used as managed PostgreSQL only.
+The application continues to use Express for authentication and business logic. Supabase provides managed PostgreSQL and, when configured, verified Auth identities exchanged for application cookies.
 
 ## Connection settings
 
@@ -20,7 +20,7 @@ DB_CONNECTION_TIMEOUT_MS=10000
 
 ## Run migrations
 
-The Supabase bootstrap migration is tracked separately from the legacy local migration chain. Set the individual `DB_*` values shown by Supabase, then run:
+Local and Supabase databases share the current `migrations_supabase/` stream; the old `migrations/` directory is historical. Set the individual `DB_*` values shown by Supabase, then run:
 
 ```bash
 npm run migrate:supabase
@@ -47,4 +47,4 @@ npm run dev
 curl http://localhost:8000/health
 ```
 
-Then run the integration suite against a separate Supabase test project or branch. Do not point destructive tests at the production database.
+Run automated integration tests against disposable local PostgreSQL as described in [README_TESTING.md](README_TESTING.md). Hosted identity behavior still needs a staging Auth smoke test.

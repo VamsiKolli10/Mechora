@@ -77,7 +77,7 @@ const productAssetsJoin = `
 `;
 
 // CREATE watch
-const insertWatch = async (data) => {
+const insertWatch = async (data, client = null) => {
   const {
     brand_id,
     collection_id,
@@ -112,9 +112,10 @@ const insertWatch = async (data) => {
   const watchSlug = slug || generateSlug(`${brand || ""} ${model || ""} ${reference || ""}`.trim());
   
   // Use sale_price or price (legacy)
-  const finalSalePrice = sale_price || price;
+  const finalSalePrice = sale_price ?? price;
 
-  return query(
+  const dbQuery = client ? client.query.bind(client) : query;
+  return dbQuery(
     `INSERT INTO watches (
       brand_id, collection_id, brand, model, reference, sku, slug,
       complication, case_material, bracelet_material, dial, hour_markings,
@@ -375,50 +376,25 @@ const deleteById = (id) => {
 };
 
 // Full-text search
-const fullTextSearch = (searchTerm, options = {}) => {
+const fullTextSearch = async (searchTerm, options = {}) => {
   const { page = 1, limit = 20 } = options;
   const offset = (page - 1) * limit;
-
-  return query(
-    `SELECT 
-      w.*,
-      b.name as brand_name,
-      b.slug as brand_slug,
-      c.name as collection_name,
-      c.slug as collection_slug,
-      media.assets,
-      ts_rank(
-        to_tsvector('english', 
-          COALESCE(w.brand, '') || ' ' || 
-          COALESCE(w.model, '') || ' ' || 
-          COALESCE(w.reference, '') || ' ' || 
-          COALESCE(w.complication, '') || ' ' || 
-          COALESCE(w.description, '')
-        ),
-        plainto_tsquery('english', $1)
-      ) as rank
-    FROM watches w
-    LEFT JOIN brands b ON w.brand_id = b.id
-    LEFT JOIN collections c ON w.collection_id = c.id
-    ${productAssetsJoin}
-    WHERE w.deleted_at IS NULL
-      AND w.is_active = true
-      AND (
-        to_tsvector('english', 
-          COALESCE(w.brand, '') || ' ' || 
-          COALESCE(w.model, '') || ' ' || 
-          COALESCE(w.reference, '') || ' ' || 
-          COALESCE(w.complication, '') || ' ' || 
-          COALESCE(w.description, '')
-        ) @@ plainto_tsquery('english', $1)
-        OR w.brand ILIKE $2
-        OR w.model ILIKE $2
-        OR w.reference ILIKE $2
-      )
-    ORDER BY rank DESC, w.created_at DESC
-    LIMIT $3 OFFSET $4`,
-    [searchTerm, `%${searchTerm}%`, limit, offset]
-  );
+  const searchable = `to_tsvector('english',
+    COALESCE(w.brand, '') || ' ' || COALESCE(w.model, '') || ' ' ||
+    COALESCE(w.reference, '') || ' ' || COALESCE(w.complication, '') || ' ' || COALESCE(w.description, ''))`;
+  const where = `WHERE w.deleted_at IS NULL AND w.is_active = true AND (
+    ${searchable} @@ plainto_tsquery('english', $1) OR w.brand ILIKE $2 OR w.model ILIKE $2 OR w.reference ILIKE $2)`;
+  const params = [searchTerm, `%${searchTerm}%`];
+  const [result, count] = await Promise.all([
+    query(`SELECT w.*, b.name AS brand_name, b.slug AS brand_slug,
+      c.name AS collection_name, c.slug AS collection_slug, media.assets,
+      ts_rank(${searchable}, plainto_tsquery('english', $1)) AS rank
+      FROM watches w LEFT JOIN brands b ON w.brand_id = b.id
+      LEFT JOIN collections c ON w.collection_id = c.id ${productAssetsJoin}
+      ${where} ORDER BY rank DESC, w.created_at DESC, w.id DESC LIMIT $3 OFFSET $4`, [...params, limit, offset]),
+    query(`SELECT COUNT(*) AS total FROM watches w ${where}`, params),
+  ]);
+  return { ...result, total: Number(count.rows[0].total), totalPages: Math.ceil(Number(count.rows[0].total) / limit) };
 };
 
 // Get search suggestions/autocomplete

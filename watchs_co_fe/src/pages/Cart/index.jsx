@@ -33,6 +33,7 @@ import {
   updateCartItem,
   removeFromCart,
   clearCart,
+  mergeCart,
 } from "@/features/cart/cartSlice";
 import { buildWatchDetailPath } from "@/utils/watchRoutes";
 import { getErrorMessage } from "@/utils/errors";
@@ -40,7 +41,7 @@ import { getErrorMessage } from "@/utils/errors";
 const Cart = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { cart, items, subtotal, itemCount, loading, error } = useSelector(
+  const { cart, items, subtotal, itemCount, loading, error, mergeError } = useSelector(
     (state) => state.cart
   );
 
@@ -86,6 +87,7 @@ const Cart = () => {
         <Box sx={{ width: 72, height: 72, borderRadius: "50%", bgcolor: "background.accent", display: "grid", placeItems: "center", mx: "auto", mb: 2.5 }}>
           <CartIcon sx={{ fontSize: 32, color: "secondary.main" }} />
         </Box>
+        {mergeError && <Alert severity="warning" sx={{ mb: 3 }} action={<Button onClick={() => dispatch(mergeCart())}>Retry merge</Button>}>{mergeError}</Alert>}
         <Typography variant="h3" gutterBottom>
           Your cart is empty
         </Typography>
@@ -99,10 +101,7 @@ const Cart = () => {
     );
   }
 
-  // Calculate totals (tax and shipping would come from backend in real app)
-  const tax = subtotal * 0.08; // 8% tax example
-  const shipping = subtotal > 5000 ? 0 : 50; // Free shipping over $5000
-  const total = subtotal + tax + shipping;
+  const total = items.reduce((sum, item) => sum + Math.round(Number(item.current_price ?? item.price_at_added) * 100) * item.quantity, 0) / 100;
 
   return (
     <Box sx={{ py: { xs: 1, md: 3 } }}>
@@ -111,10 +110,11 @@ const Cart = () => {
         <Typography variant="h2" sx={{ fontSize: { xs: "2.6rem", md: "4rem" } }}>
           Shopping bag
         </Typography>
-        <Typography color="text.secondary">{itemCount} {itemCount === 1 ? "piece" : "pieces"} reserved for checkout</Typography>
+        <Typography color="text.secondary">{itemCount} {itemCount === 1 ? "piece" : "pieces"} in your bag</Typography>
       </Stack>
 
-      {error && (
+      {mergeError && <Alert severity="warning" sx={{ mb: 3 }} action={<Button onClick={() => dispatch(mergeCart())}>Retry merge</Button>}>{mergeError}</Alert>}
+      {error && error !== mergeError && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {getErrorMessage({ error }, "Unable to load cart")}
         </Alert>
@@ -127,16 +127,8 @@ const Cart = () => {
               <LocalShippingRounded color="success" />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="body2" fontWeight={700}>
-                  {subtotal >= 5000
-                    ? "You unlocked complimentary insured shipping"
-                    : `${formatPrice(5000 - subtotal)} away from complimentary insured shipping`}
+                  Adding to your bag does not reserve stock. Tax and delivery will be quoted separately.
                 </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min((subtotal / 5000) * 100, 100)}
-                  color="success"
-                  sx={{ mt: 1, height: 6, borderRadius: 99 }}
-                />
               </Box>
             </Stack>
           </Paper>
@@ -171,7 +163,7 @@ const Cart = () => {
                         </Typography>
                       )}
                       <Typography variant="h6" color="primary">
-                        {formatPrice(item.price_at_added)}
+                        {formatPrice(item.current_price ?? item.price_at_added)}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -200,7 +192,7 @@ const Cart = () => {
                         <IconButton
                           size="small"
                           aria-label={`Increase quantity of ${item.model}`}
-                          disabled={item.quantity >= item.stock_quantity}
+                          disabled={item.quantity >= Math.min(10, item.stock_quantity)}
                           onClick={() =>
                             handleQuantityChange(item.id, item.quantity + 1)
                           }
@@ -217,7 +209,7 @@ const Cart = () => {
                         Remove
                       </Button>
                       <Typography variant="h6">
-                        {formatPrice(item.price_at_added * item.quantity)}
+                        {formatPrice((item.current_price ?? item.price_at_added) * item.quantity)}
                       </Typography>
                     </Stack>
                   </Grid>
@@ -238,26 +230,20 @@ const Cart = () => {
               <TableBody>
                 <TableRow>
                   <TableCell>Subtotal</TableCell>
-                  <TableCell align="right">{formatPrice(subtotal)}</TableCell>
+                  <TableCell align="right">{formatPrice(total)}</TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell>Tax</TableCell>
-                  <TableCell align="right">{formatPrice(tax)}</TableCell>
+                  <TableCell align="right">{"To be quoted"}</TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell>Shipping</TableCell>
                   <TableCell align="right">
-                    {shipping === 0 ? (
-                      <Typography variant="body2" color="success.main">
-                        FREE
-                      </Typography>
-                    ) : (
-                      formatPrice(shipping)
-                    )}
+                    To be quoted
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Watch subtotal</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>
                     {formatPrice(total)}
                   </TableCell>
@@ -272,7 +258,7 @@ const Cart = () => {
               onClick={handleCheckout}
               sx={{ mt: 3 }}
             >
-              Continue to checkout
+              Continue to request
             </Button>
             <Button
               variant="outlined"
@@ -295,7 +281,7 @@ const Cart = () => {
             <Stack direction="row" spacing={1.5} alignItems="center">
               <ShieldRounded color="success" fontSize="small" />
               <Typography variant="caption" color="text.secondary">
-                Authentication, insured delivery, and secure payment are included.
+                Submit a request without payment. Availability and final costs need confirmation.
               </Typography>
             </Stack>
           </Paper>

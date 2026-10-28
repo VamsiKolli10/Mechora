@@ -77,10 +77,10 @@ const ProductList = () => {
     filters,
     brands,
     collections,
-    loading,
-    error,
+    listLoading: loading,
+    listError: error,
   } = useSelector((state) => state.watches);
-  const { wishlistStatus } = useSelector((state) => state.wishlist);
+  const { wishlistStatus, pendingIds: wishlistPending } = useSelector((state) => state.wishlist);
   const { user } = useSelector((state) => state.auth);
   const [searchQuery, setSearchQuery] = useState("");
   const [priceRange, setPriceRange] = useState([0, MAX_PRICE]);
@@ -280,10 +280,10 @@ const ProductList = () => {
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1.5, maxWidth: 650, fontSize: { md: 17 }, lineHeight: 1.7 }}>
             Curated references from established maisons and independent makers,
-            each authenticated before it reaches your wrist.
+            with condition and specifications to help you compare.
           </Typography>
           <Stack direction="row" spacing={2.5} useFlexGap flexWrap="wrap" sx={{ mt: 2.5 }}>
-            {["Expert authenticated", "Insured delivery", "7-day returns"].map((item) => (
+            {["Detailed specifications", "No-payment requests", "Availability confirmed on follow-up"].map((item) => (
               <Stack key={item} direction="row" spacing={0.75} alignItems="center">
                 <VerifiedRounded sx={{ fontSize: 17, color: "secondary.main" }} />
                 <Typography variant="caption" color="text.secondary" fontWeight={700}>{item}</Typography>
@@ -384,7 +384,7 @@ const ProductList = () => {
                   >
                     <MenuItem value="">All</MenuItem>
                     <MenuItem value="in_stock">In stock</MenuItem>
-                    <MenuItem value="pre_order">Pre-order</MenuItem>
+                    <MenuItem value="low_stock">Low stock</MenuItem>
                     <MenuItem value="out_of_stock">Out of stock</MenuItem>
                   </Select>
                 </FormControl>
@@ -507,7 +507,7 @@ const ProductList = () => {
               >
                 {watches.map((watch) => {
                   const inStock =
-                    watch.stock_status === "in_stock" &&
+                    ["in_stock", "low_stock"].includes(watch.stock_status) &&
                     Number(watch.stock_quantity) > 0;
                   return (
                     <Card
@@ -595,7 +595,7 @@ const ProductList = () => {
                             {formatPrice(watch.sale_price)}
                           </Typography>
                           <Chip
-                            label={inStock ? "Ready to ship" : "Unavailable"}
+                            label={inStock ? "In stock" : "Unavailable"}
                             size="small"
                             color={inStock ? "success" : "default"}
                             variant={inStock ? "filled" : "outlined"}
@@ -609,6 +609,7 @@ const ProductList = () => {
                               ? `Remove ${watch.model} from wishlist`
                               : `Add ${watch.model} to wishlist`
                           }
+                          disabled={Boolean(wishlistPending[watch.id])}
                           onClick={() => handleWishlistToggle(watch.id)}
                           color={wishlistStatus[watch.id] ? "error" : "default"}
                         >

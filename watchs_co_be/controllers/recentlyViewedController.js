@@ -8,7 +8,7 @@ const {
 exports.addItem = async (req, res) => {
   try {
     const userId = req.user?.id;
-    const guestContext = userId ? extractGuestToken(req) : ensureGuestToken(req, res);
+    const guestContext = userId ? null : ensureGuestToken(req, res);
     const guestToken = guestContext?.rawToken;
     const { watch_id } = req.body;
 

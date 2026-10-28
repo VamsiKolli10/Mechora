@@ -200,7 +200,7 @@ const AccountOrders = () => {
                     <TableCell>
                       {new Date(order.created_at).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>{order.items?.length || 0} items</TableCell>
+                    <TableCell>{order.item_count || 0} items</TableCell>
                     <TableCell>{formatPrice(order.total_amount)}</TableCell>
                     <TableCell>
                       <Chip label={order.status} color={getStatusColor(order.status)} size="small" />

@@ -1,54 +1,32 @@
 const { query } = require("../db");
+const { withTransaction } = require("../utils/transaction");
 
 const resolveQuery = (client) =>
   client ? client.query.bind(client) : query;
 
-// Get or create cart for user
-const getOrCreateUserCart = async (userId) => {
-  // Try to find existing active cart
-  const existingCart = await query(
-    "SELECT * FROM carts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
-    [userId]
+const createCartError = (message, status = 400) => Object.assign(new Error(message), { status });
+const getOrCreateCart = (field, owner, client = null) => withTransaction(async (tx) => {
+  if (!owner) throw createCartError("Cart owner is required");
+  // Serialize first creation without relying on indexes absent from legacy databases.
+  await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`cart:${field}:${owner}`]);
+  const existing = await tx.query(
+    `SELECT * FROM carts WHERE ${field} = $1 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, [owner]
   );
+  if (existing.rows.length) return existing.rows[0];
+  const inserted = await tx.query(`INSERT INTO carts (${field}) VALUES ($1) RETURNING *`, [owner]);
+  return inserted.rows[0];
+}, client);
 
-  if (existingCart.rows.length > 0) {
-    return existingCart.rows[0];
-  }
-
-  // Create new cart
-  const newCart = await query(
-    "INSERT INTO carts (user_id) VALUES ($1) RETURNING *",
-    [userId]
-  );
-  return newCart.rows[0];
-};
-
-// Get or create cart for guest
-const getOrCreateGuestCart = async (guestToken) => {
-  if (!guestToken) {
-    throw new Error("Guest token is required");
-  }
-
-  const existingCart = await query(
-    "SELECT * FROM carts WHERE guest_token = $1 ORDER BY created_at DESC LIMIT 1",
-    [guestToken]
-  );
-
-  if (existingCart.rows.length > 0) {
-    return existingCart.rows[0];
-  }
-
-  const newCart = await query(
-    "INSERT INTO carts (guest_token) VALUES ($1) RETURNING *",
-    [guestToken]
-  );
-  return newCart.rows[0];
-};
+const getOrCreateUserCart = (userId, client = null) => getOrCreateCart("user_id", userId, client);
+const getOrCreateGuestCart = (guestToken, client = null) => getOrCreateCart("guest_token", guestToken, client);
 
 // Get cart with items
 const getCartWithItems = async (cartId, client = null) => {
   const dbQuery = resolveQuery(client);
-  const cartResult = await dbQuery("SELECT * FROM carts WHERE id = $1", [cartId]);
+  const cartResult = await dbQuery(
+    `SELECT * FROM carts WHERE id = $1${client ? " FOR UPDATE" : ""}`,
+    [cartId]
+  );
   if (cartResult.rows.length === 0) {
     return null;
   }
@@ -93,8 +71,8 @@ const getCartWithItems = async (cartId, client = null) => {
 
   // Calculate totals
   cart.subtotal = itemsResult.rows.reduce((sum, item) => {
-    return sum + parseFloat(item.price_at_added || 0) * item.quantity;
-  }, 0);
+    return sum + Math.round(Number(item.current_price ?? item.price_at_added ?? 0) * 100) * item.quantity;
+  }, 0) / 100;
 
   cart.item_count = itemsResult.rows.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -102,28 +80,30 @@ const getCartWithItems = async (cartId, client = null) => {
 };
 
 // Add item to cart
-const addItemToCart = async (cartId, watchId, quantity = 1) => {
+const addItemToCart = async (cartId, watchId, quantity = 1, client = null) => {
+  const dbQuery = resolveQuery(client);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) throw createCartError("Invalid quantity");
   // Get watch price
-  const watchResult = await query(
+  const watchResult = await dbQuery(
     "SELECT sale_price, stock_status, stock_quantity, is_active FROM watches WHERE id = $1 AND deleted_at IS NULL",
     [watchId]
   );
 
   if (watchResult.rows.length === 0) {
-    throw new Error("Watch not found");
+    throw createCartError("Watch not found");
   }
 
   const watch = watchResult.rows[0];
   if (!watch.is_active) {
-    throw new Error("Watch is not available");
+    throw createCartError("Watch is not available");
   }
 
-  if (watch.stock_status !== "in_stock" || watch.stock_quantity < quantity) {
-    throw new Error("Insufficient stock");
+  if (!["in_stock", "low_stock"].includes(watch.stock_status) || watch.stock_quantity < quantity) {
+    throw createCartError("Insufficient stock");
   }
 
   // Check if item already exists in cart
-  const existingItem = await query(
+  const existingItem = await dbQuery(
     "SELECT * FROM cart_items WHERE cart_id = $1 AND watch_id = $2",
     [cartId, watchId]
   );
@@ -132,9 +112,9 @@ const addItemToCart = async (cartId, watchId, quantity = 1) => {
     // Update quantity
     const newQuantity = existingItem.rows[0].quantity + quantity;
     if (newQuantity > watch.stock_quantity || newQuantity > 10) {
-      throw new Error("Insufficient stock");
+      throw createCartError("Insufficient stock");
     }
-    const result = await query(
+    const result = await dbQuery(
       `UPDATE cart_items 
        SET quantity = $1, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $2 
@@ -144,7 +124,7 @@ const addItemToCart = async (cartId, watchId, quantity = 1) => {
     return result.rows[0];
   } else {
     // Add new item
-    const result = await query(
+    const result = await dbQuery(
       `INSERT INTO cart_items (cart_id, watch_id, quantity, price_at_added)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
@@ -155,19 +135,21 @@ const addItemToCart = async (cartId, watchId, quantity = 1) => {
 };
 
 // Update cart item quantity
-const updateCartItemQuantity = async (cartId, cartItemId, quantity) => {
+const updateCartItemQuantity = async (cartId, cartItemId, quantity, client = null) => {
+  const dbQuery = resolveQuery(client);
   if (!cartId) {
-    throw new Error("Cart not found");
+    throw createCartError("Cart not found");
   }
 
   if (quantity <= 0) {
     // Remove item if quantity is 0 or less
-    return await removeCartItem(cartId, cartItemId);
+    return await removeCartItem(cartId, cartItemId, client);
   }
 
+  if (!Number.isInteger(quantity) || quantity > 10) throw createCartError("Invalid quantity");
   // Get cart item to check stock
-  const itemResult = await query(
-    `SELECT ci.*, w.stock_quantity, w.stock_status 
+  const itemResult = await dbQuery(
+    `SELECT ci.*, w.stock_quantity, w.stock_status, w.is_active, w.deleted_at
      FROM cart_items ci
      JOIN watches w ON ci.watch_id = w.id
      WHERE ci.id = $1 AND ci.cart_id = $2`,
@@ -175,15 +157,15 @@ const updateCartItemQuantity = async (cartId, cartItemId, quantity) => {
   );
 
   if (itemResult.rows.length === 0) {
-    throw new Error("Cart item not found");
+    throw createCartError("Cart item not found");
   }
 
   const item = itemResult.rows[0];
-  if (item.stock_status !== "in_stock" || item.stock_quantity < quantity) {
-    throw new Error("Insufficient stock");
+  if (!item.is_active || item.deleted_at || !["in_stock", "low_stock"].includes(item.stock_status) || item.stock_quantity < quantity) {
+    throw createCartError("Insufficient stock");
   }
 
-  const result = await query(
+  const result = await dbQuery(
     `UPDATE cart_items 
      SET quantity = $1, updated_at = CURRENT_TIMESTAMP 
      WHERE id = $2 AND cart_id = $3
@@ -194,18 +176,19 @@ const updateCartItemQuantity = async (cartId, cartItemId, quantity) => {
 };
 
 // Remove item from cart
-const removeCartItem = async (cartId, cartItemId) => {
+const removeCartItem = async (cartId, cartItemId, client = null) => {
+  const dbQuery = resolveQuery(client);
   if (!cartId) {
-    throw new Error("Cart not found");
+    throw createCartError("Cart not found");
   }
 
-  const result = await query(
+  const result = await dbQuery(
     "DELETE FROM cart_items WHERE id = $1 AND cart_id = $2 RETURNING *",
     [cartItemId, cartId]
   );
 
   if (result.rows.length === 0) {
-    throw new Error("Cart item not found");
+    throw createCartError("Cart item not found");
   }
 
   return result.rows[0];
@@ -219,31 +202,29 @@ const clearCart = async (cartId, client = null) => {
 };
 
 // Merge guest cart into user cart
-const mergeGuestCartIntoUserCart = async (guestToken, userId) => {
-  const guestCart = await query(
-    "SELECT * FROM carts WHERE guest_token = $1",
-    [guestToken]
-  );
-
-  if (guestCart.rows.length === 0) {
-    return null;
+const mergeGuestCartIntoUserCart = (guestToken, userId) => withTransaction(async (client) => {
+  const userCart = await getOrCreateUserCart(userId, client);
+  const user = await getCartWithItems(userCart.id, client);
+  if (!guestToken) return user;
+  const { rows } = await client.query("SELECT * FROM carts WHERE guest_token = $1 FOR UPDATE", [guestToken]);
+  if (!rows.length) return user;
+  const guest = await getCartWithItems(rows[0].id, client);
+  const existing = new Map(user.items.map(item => [item.watch_id, item]));
+  for (const item of guest.items) {
+    const target = existing.get(item.watch_id);
+    if (target) {
+      const quantity = target.quantity + item.quantity;
+      if (quantity > 10 || quantity > item.stock_quantity) {
+        throw createCartError("Your bags exceed availability for a selected watch. Adjust the quantity in your account bag, then retry merging.", 409);
+      }
+      await client.query("UPDATE cart_items SET quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [quantity, target.id]);
+    } else {
+      await client.query("UPDATE cart_items SET cart_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [user.id, item.id]);
+    }
   }
-
-  const userCart = await getOrCreateUserCart(userId);
-
-  // Move all items from guest cart to user cart
-  await query(
-    `UPDATE cart_items 
-     SET cart_id = $1, updated_at = CURRENT_TIMESTAMP 
-     WHERE cart_id = $2`,
-    [userCart.id, guestCart.rows[0].id]
-  );
-
-  // Delete guest cart
-  await query("DELETE FROM carts WHERE id = $1", [guestCart.rows[0].id]);
-
-  return await getCartWithItems(userCart.id);
-};
+  await client.query("DELETE FROM carts WHERE id = $1", [guest.id]);
+  return getCartWithItems(user.id, client);
+});
 
 module.exports = {
   getOrCreateUserCart,

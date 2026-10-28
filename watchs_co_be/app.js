@@ -1,7 +1,7 @@
 const express = require("express");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
-require("dotenv").config();
+if (process.env.NODE_ENV !== "test") require("dotenv").config();
 
 const app = express();
 const usersRoute = require("./routes/users");
@@ -42,6 +42,10 @@ app.use(createHelmetMiddleware());
 app.use(createCorsMiddleware());
 app.use(morgan(config.env === "production" ? "combined" : "dev", { stream: logger.stream }));
 app.use(cookieParser(config.cookies.secret));
+// This release accepts requests only; stored payment credentials cannot enable charging.
+app.use("/api/payments", (_req, res) => res.status(503).json({
+  error: "Online payments are currently unavailable. No payment has been taken.",
+}));
 app.post(
   "/api/payments/webhook",
   express.raw({ type: "application/json" }),

@@ -6,7 +6,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // Keep the client optional during the migration from the existing Express auth.
 // The app can continue using its cookie session until both values are configured.
 export const supabase =
-  supabaseUrl && supabaseAnonKey
+  supabaseUrl && supabaseAnonKey && !/your-project|your-anon|your-publishable/i.test(`${supabaseUrl} ${supabaseAnonKey}`)
     ? createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
           persistSession: true,

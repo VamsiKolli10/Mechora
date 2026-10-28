@@ -28,7 +28,7 @@ const addToRecentlyViewed = async (userId, guestToken, watchId) => {
 // Get recently viewed for user
 const getRecentlyViewed = async (userId, limit = 10) => {
   const result = await query(
-    `SELECT DISTINCT ON (rv.watch_id)
+    `SELECT recent.* FROM (SELECT DISTINCT ON (rv.watch_id)
       rv.*,
       w.id as watch_id,
       w.brand,
@@ -46,8 +46,8 @@ const getRecentlyViewed = async (userId, limit = 10) => {
     JOIN watches w ON rv.watch_id = w.id
     LEFT JOIN brands b ON w.brand_id = b.id
     WHERE rv.user_id = $1 AND w.deleted_at IS NULL
-    ORDER BY rv.watch_id, rv.viewed_at DESC
-    LIMIT $2`,
+    ORDER BY rv.watch_id, rv.viewed_at DESC, rv.id DESC
+    ) recent ORDER BY recent.viewed_at DESC, recent.id DESC LIMIT $2`,
     [userId, limit]
   );
   return result.rows;
@@ -56,7 +56,7 @@ const getRecentlyViewed = async (userId, limit = 10) => {
 // Get recently viewed for guest
 const getGuestRecentlyViewed = async (guestToken, limit = 10) => {
   const result = await query(
-    `SELECT DISTINCT ON (rv.watch_id)
+    `SELECT recent.* FROM (SELECT DISTINCT ON (rv.watch_id)
       rv.*,
       w.id as watch_id,
       w.brand,
@@ -74,8 +74,8 @@ const getGuestRecentlyViewed = async (guestToken, limit = 10) => {
     JOIN watches w ON rv.watch_id = w.id
     LEFT JOIN brands b ON w.brand_id = b.id
     WHERE rv.guest_token = $1 AND w.deleted_at IS NULL
-    ORDER BY rv.watch_id, rv.viewed_at DESC
-    LIMIT $2`,
+    ORDER BY rv.watch_id, rv.viewed_at DESC, rv.id DESC
+    ) recent ORDER BY recent.viewed_at DESC, recent.id DESC LIMIT $2`,
     [guestToken, limit]
   );
   return result.rows;

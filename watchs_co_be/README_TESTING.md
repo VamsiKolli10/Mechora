@@ -2,21 +2,20 @@
 
 ## Setup
 
-1. Create a separate test database or Supabase test project:
-```bash
-createdb watchs_co_test
-```
+Use Node.js 22+ and a disposable local PostgreSQL database. Tests modify data and deliberately reject non-loopback hosts. External identity and email services are mocked.
 
-2. Configure the test database connection in the environment used by Jest. For Supabase, set `DATABASE_URL` and `DB_SSL=true`:
-```bash
-export DATABASE_URL=postgresql://...
-export DB_SSL=true
-```
-
-3. Install dependencies:
 ```bash
 npm install
+createdb mechora_test
+export NODE_ENV=test
+export DB_HOST=127.0.0.1 DB_PORT=5432 DB_NAME=mechora_test
+export DB_USER=your_local_postgres_user DB_PASSWORD= DB_SSL=false
+export DATABASE_URL=postgresql://your_local_postgres_user@127.0.0.1:5432/mechora_test
+npm run migrate
+npm test -- --runInBand
 ```
+
+Set test secrets using the defaults in `tests/setup.js` or supply your own test-only values. Never load production credentials. `DB_POOL_MAX=1` also exercises checkout and transaction paths with a single database connection.
 
 ## Running Tests
 
@@ -95,9 +94,9 @@ describe("Authentication API", () => {
 
 ## Test Database
 
-- Tests use a separate test database or Supabase test project
+- Tests use a disposable local PostgreSQL database
 - Tests should clean up after themselves
-- Use `beforeAll` and `afterAll` hooks for setup and teardown
+- Use `beforeAll` and `afterAll` hooks for fixtures. The custom Jest environment closes database pools after all cleanup hooks; do not close a pool inside a suite.
 
 ## Coverage
 
@@ -119,7 +118,7 @@ Coverage reports are generated in the `coverage/` directory.
 
 ## Continuous Integration
 
-Unit tests should run on every CI change. Integration tests should run when a disposable test database is available:
+Unit tests should run on every CI change. The optional integration CI job provisions PostgreSQL 16 and runs migrations before the suite when `RUN_INTEGRATION_TESTS=true`. Unit tests run on every change:
 
 ```yaml
 - name: Run unit tests

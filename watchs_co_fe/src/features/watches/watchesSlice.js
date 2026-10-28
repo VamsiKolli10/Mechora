@@ -136,6 +136,8 @@ const initialState = {
   },
   loading: false,
   error: null,
+  listLoading: false, detailLoading: false, listError: null, detailError: null,
+  listRequestId: null, detailRequestId: null,
 };
 
 const watchesSlice = createSlice({
@@ -156,37 +158,31 @@ const watchesSlice = createSlice({
     },
     clearCurrentWatch: (state) => {
       state.currentWatch = null;
+      state.detailRequestId = null;
+      state.detailError = null;
+      state.detailLoading = false;
+      state.loading = state.listLoading;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchWatches.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+      .addCase(fetchWatches.pending, (state, action) => {
+        state.listRequestId = action.meta.requestId;
+        state.listLoading = state.loading = true;
+        state.listError = state.error = null;
       })
       .addCase(fetchWatches.fulfilled, (state, action) => {
-        state.loading = false;
+        if (state.listRequestId !== action.meta.requestId) return;
+        state.listLoading = false;
+        state.loading = state.detailLoading;
         state.watches = action.payload.watches || [];
         state.pagination = action.payload.pagination || state.pagination;
       })
       .addCase(fetchWatches.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(fetchWatchBySlug.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchWatchBySlug.fulfilled, (state, action) => {
-        state.loading = false;
-        state.currentWatch = action.payload;
-      })
-      .addCase(fetchWatchBySlug.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(fetchWatchById.fulfilled, (state, action) => {
-        state.currentWatch = action.payload;
+        if (state.listRequestId !== action.meta.requestId) return;
+        state.listLoading = false;
+        state.loading = state.detailLoading;
+        state.listError = state.error = action.payload;
       })
       .addCase(fetchFeaturedWatches.fulfilled, (state, action) => {
         state.featuredWatches = action.payload;
@@ -204,6 +200,25 @@ const watchesSlice = createSlice({
       .addCase(fetchCollections.fulfilled, (state, action) => {
         state.collections = action.payload;
       });
+    [fetchWatchBySlug, fetchWatchById].forEach(thunk => {
+      builder.addCase(thunk.pending, (state, action) => {
+        state.detailRequestId = action.meta.requestId;
+        state.detailLoading = state.loading = true;
+        state.detailError = state.error = null;
+      });
+      builder.addCase(thunk.fulfilled, (state, action) => {
+        if (state.detailRequestId !== action.meta.requestId) return;
+        state.detailLoading = false;
+        state.loading = state.listLoading;
+        state.currentWatch = action.payload;
+      });
+      builder.addCase(thunk.rejected, (state, action) => {
+        if (state.detailRequestId !== action.meta.requestId) return;
+        state.detailLoading = false;
+        state.loading = state.listLoading;
+        state.detailError = state.error = action.payload || action.error.message;
+      });
+    });
   },
 });
 

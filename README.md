@@ -29,7 +29,7 @@ Deferred from the MVP:
 | `watchs_co_be/` | Express API, PostgreSQL access, migrations, seeds, and tests |
 | `watchs_co_fe/` | Vite + React storefront, Redux state, and frontend tests |
 | `API_DOCUMENTATION.md` | API routes, authentication behavior, and request examples |
-| `watchs_co_be/migrations_supabase/` | Supabase-compatible migrations |
+| `watchs_co_be/migrations_supabase/` | Current migrations for local and Supabase databases |
 | `watchs_co_be/seeds/catalog.sql` | Curated catalog seed data |
 | `CONTRIBUTING.md` | Local development and change workflow |
 | `SECURITY.md` | Secrets and production security practices |
@@ -50,7 +50,7 @@ flowchart LR
 
 ## Prerequisites
 
-- Node.js 20 LTS or newer
+- Node.js 22 or newer
 - npm 10 or newer
 - PostgreSQL 15 or newer, or a Supabase project
 - Git
@@ -94,7 +94,9 @@ npm run migrate:supabase
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f seeds/catalog.sql
 ```
 
-Use a separate database or Supabase project for integration tests. Never point destructive tests at production.
+Local and hosted databases use the current `migrations_supabase/` stream. The archived `migrations/` directory is historical. Migrations are forward-only; deploy the session-version migration before starting the updated API.
+
+Integration tests require a disposable local PostgreSQL database; see [`watchs_co_be/README_TESTING.md`](watchs_co_be/README_TESTING.md).
 
 ### Configure the frontend
 

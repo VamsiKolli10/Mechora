@@ -8,6 +8,7 @@ const {
   verifyEmail,
   logout,
   supabaseSession,
+  revokeSupabaseSessions,
 } = require("../controllers/authController");
 const { passwordValidator } = require("../middleware/passwordValidator");
 const { authRateLimiter } = require("../middleware/rateLimiter");
@@ -28,7 +29,8 @@ router.post(
   signup
 );
 router.post("/refresh", validateRequest(authSchemas.refresh), refreshToken);
-router.post("/supabase-session", supabaseSession);
+router.post("/supabase-session", validateRequest(authSchemas.supabaseSession), supabaseSession);
+router.post("/supabase-revoke", validateRequest(authSchemas.supabaseSession), revokeSupabaseSessions);
 router.post(
   "/password-reset/request",
   validateRequest(authSchemas.requestPasswordReset),

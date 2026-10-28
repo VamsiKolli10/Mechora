@@ -4,8 +4,8 @@
 
 ### Prerequisites
 
-- **Node.js** (v16 or higher)
-- **PostgreSQL** (v12 or higher)
+- **Node.js** (v22 or higher)
+- **PostgreSQL** (v15 or higher)
 - **Docker** (optional, for containerized deployment)
 
 ### Installing Dependencies
@@ -109,12 +109,6 @@ createdb watchs_co_db
 2. Run database migrations:
 
 ```bash
-npx db-migrate up --env dev --config migrate-config.js
-```
-
-Or use the npm script:
-
-```bash
 npm run migrate
 ```
 
@@ -139,8 +133,8 @@ watchs_co_be/
 │   └── watches.js
 ├── middleware/          # Custom middleware functions
 │   └── authMiddleware.js
-├── migrations/          # Database migration files
-│   └── 20250506222113-add-email-to-users.js
+├── migrations_supabase/ # Current local and hosted database migrations
+│   └── 00000000000000-bootstrap-schema.js
 ├── scripts/             # Utility and setup scripts
 │   └── importWatches.js
 ├── config/              # Configuration files
@@ -269,8 +263,7 @@ curl -X GET http://localhost:8000/api/watches/1
 Use the provided import script to populate the database with sample data:
 
 ```bash
-# Update the CSV path in scripts/importWatches.js if needed
-node scripts/importWatches.js
+node scripts/importWatches.js /absolute/path/to/watches.csv
 ```
 
 ## Adding New Features
@@ -358,7 +351,7 @@ app.use("/api/new-feature", newFeatureRoute);
 1. **Create a migration file**:
 
 ```bash
-npx db-migrate create add-new-feature-table --env dev --config migrate-config.js
+npx db-migrate create add-new-feature-table --env dev --config database.json --migrations-dir migrations_supabase
 ```
 
 2. **Edit the migration file**:
@@ -529,14 +522,10 @@ sudo systemctl start postgresql
 1. **Check migration status**:
 
 ```bash
-npx db-migrate status --env dev --config migrate-config.js
+npx db-migrate up --check --env dev --config database.json --migrations-dir migrations_supabase
 ```
 
-2. **Rollback migrations if needed**:
-
-```bash
-npm run rollback
-```
+2. **Apply a corrective forward migration**. Current checkout/session migrations deliberately reject rollback to preserve retry records and session revocation.
 
 3. **Clean database** (use with caution):
 

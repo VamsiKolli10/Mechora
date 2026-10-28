@@ -109,7 +109,7 @@ const getOrderById = async (orderId, userId = null) => {
   const params = [orderId];
 
   if (userId) {
-    sql += " AND (o.user_id = $2 OR o.user_id IS NULL)";
+    sql += " AND o.user_id = $2";
     params.push(userId);
   }
 
@@ -202,7 +202,7 @@ const getOrderByOrderNumber = async (orderNumber, userId = null) => {
   const params = [orderNumber];
 
   if (userId) {
-    sql += " AND (user_id = $2 OR user_id IS NULL)";
+    sql += " AND user_id = $2";
     params.push(userId);
   }
 
@@ -220,7 +220,7 @@ const getUserOrders = async (userId, options = {}) => {
   const offset = (page - 1) * limit;
 
   let sql = `
-    SELECT * FROM orders 
+    SELECT orders.*, (SELECT COALESCE(SUM(quantity), 0)::integer FROM order_items WHERE order_id = orders.id) AS item_count FROM orders
     WHERE user_id = $1
   `;
   const params = [userId];

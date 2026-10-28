@@ -48,8 +48,8 @@ const ProductDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { currentWatch, loading, error } = useSelector((state) => state.watches);
-  const { wishlistStatus } = useSelector((state) => state.wishlist);
+  const { currentWatch, detailLoading: loading, detailError: error } = useSelector((state) => state.watches);
+  const { wishlistStatus, pendingIds: wishlistPending } = useSelector((state) => state.wishlist);
   const { user } = useSelector((state) => state.auth);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -62,6 +62,10 @@ const ProductDetail = () => {
   });
 
   useEffect(() => {
+    setSelectedImage(0);
+    setQuantity(1);
+    setTabValue(0);
+    setNotice(previous => ({ ...previous, open: false }));
     dispatch(clearCurrentWatch());
     if (!slug) return;
 
@@ -183,7 +187,7 @@ const ProductDetail = () => {
   const mainImage = images[selectedImage] || images[0];
   const availableQuantity = Math.max(Number(currentWatch.stock_quantity) || 0, 0);
   const inStock =
-    currentWatch.stock_status === "in_stock" && availableQuantity > 0;
+    ["in_stock", "low_stock"].includes(currentWatch.stock_status) && availableQuantity > 0;
 
   return (
     <Box sx={{ py: { xs: 3, md: 6 } }}>
@@ -235,7 +239,11 @@ const ProductDetail = () => {
                 {images.map((image, index) => (
                   <Paper
                     elevation={0}
-                    key={image.id}
+                    key={image.id || index}
+                    component="button"
+                    type="button"
+                    aria-label={`View image ${index + 1}`}
+                    aria-pressed={selectedImage === index}
                     onClick={() => setSelectedImage(index)}
                     sx={{
                       width: 100,
@@ -389,6 +397,8 @@ const ProductDetail = () => {
                   {adding ? <CircularProgress size={22} color="inherit" /> : "Add to bag"}
                 </Button>
                 <IconButton
+                  aria-label={wishlistStatus[currentWatch.id] ? "Remove from wishlist" : "Save to wishlist"}
+                  disabled={Boolean(wishlistPending[currentWatch.id])}
                   onClick={handleWishlistToggle}
                   color={wishlistStatus[currentWatch.id] ? "error" : "default"}
                   size="large"
@@ -409,23 +419,23 @@ const ProductDetail = () => {
                 onClick={() => handleAddToCart({ checkout: true })}
                 disabled={!inStock || adding}
               >
-                Buy it now
+                Request this watch
               </Button>
 
               <Stack spacing={1}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CheckCircle color="success" fontSize="small" />
                   <Typography variant="body2">
-                    Condition and provenance reviewed before dispatch
+                    Review condition and specifications below
                   </Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CheckCircle color="success" fontSize="small" />
-                  <Typography variant="body2">Tracked, insured delivery</Typography>
+                  <Typography variant="body2">Delivery options quoted separately</Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CheckCircle color="success" fontSize="small" />
-                  <Typography variant="body2">Clear return terms before purchase</Typography>
+                  <Typography variant="body2">No payment or stock reservation at this stage</Typography>
                 </Stack>
               </Stack>
             </Stack>

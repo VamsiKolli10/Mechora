@@ -11,6 +11,13 @@ const api = axios.create({
 });
 
 let refreshRequest = null;
+let readSessionIdentity = () => null;
+export const setSessionIdentityReader = (reader) => { readSessionIdentity = reader; };
+
+api.interceptors.request.use((request) => {
+  if (request._sessionIdentity === undefined) request._sessionIdentity = readSessionIdentity();
+  return request;
+});
 
 api.interceptors.response.use(
   (response) => response,
@@ -22,6 +29,7 @@ api.interceptors.response.use(
     if (!isUnauthorized || !originalRequest || originalRequest._retry || isAuthRequest) {
       return Promise.reject(error);
     }
+    if (originalRequest._sessionIdentity !== readSessionIdentity()) return Promise.reject(error);
 
     originalRequest._retry = true;
     refreshRequest ||= axios
@@ -32,8 +40,12 @@ api.interceptors.response.use(
 
     try {
       await refreshRequest;
+      if (originalRequest._sessionIdentity !== readSessionIdentity()) return Promise.reject(error);
       return api(originalRequest);
     } catch {
+      if (originalRequest._sessionIdentity === readSessionIdentity() && !originalRequest.skipSessionExpiredNotification && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("mechora:session-expired"));
+      }
       return Promise.reject(error);
     }
   }

@@ -7,7 +7,7 @@ export const fetchCurrentUser = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const { data } = await authApi.getCurrentUser();
-      return { user: data.user || data };
+      return { user: data.requires_mfa ? null : data.user ?? (data.id ? data : null) };
     } catch (error) {
       if (error.response?.status === 401) {
         return rejectWithValue("unauthenticated");
@@ -74,6 +74,8 @@ const initialState = {
   authStatus: "idle",
   error: null,
   authError: null,
+  bootstrapRequestId: null,
+  sessionEpoch: 0,
 };
 
 const authSlice = createSlice({
@@ -81,23 +83,35 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     logout: (state) => {
+      state.sessionEpoch += 1;
+      state.authStatus = "idle";
       state.user = null;
       state.session = null;
+      state.status = "succeeded";
+      state.bootstrapRequestId = null;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchCurrentUser.pending, (state) => {
-        state.status = "loading";
+      .addCase(fetchCurrentUser.pending, (state, action) => {
+        if (!state.user) state.status = "loading";
         state.error = null;
+        state.bootstrapRequestId = action.meta.requestId;
       })
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
+        if (state.bootstrapRequestId !== action.meta.requestId) return;
+        state.bootstrapRequestId = null;
         state.status = "succeeded";
-        state.user = action.payload?.user || null;
+        const user = action.payload?.user || null;
+        if (state.user?.id !== user?.id) state.sessionEpoch += 1;
+        state.user = user;
+        if (!user) state.session = null;
       })
       .addCase(fetchCurrentUser.rejected, (state, action) => {
+        if (state.bootstrapRequestId !== action.meta.requestId) return;
+        state.bootstrapRequestId = null;
         if (action.payload === "unauthenticated") {
-          state.status = "idle";
+          state.status = "succeeded";
           state.error = null;
         } else {
           state.status = "failed";
@@ -108,10 +122,14 @@ const authSlice = createSlice({
         state.session = null;
       })
       .addCase(loginUser.pending, (state) => {
+        state.status = "succeeded";
+        state.sessionEpoch += 1;
+        state.bootstrapRequestId = null;
         state.authStatus = "loading";
         state.authError = null;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
+        state.status = "succeeded";
         state.authStatus = "succeeded";
         state.user = action.payload.user;
         state.session = action.payload.session || null;
@@ -122,10 +140,14 @@ const authSlice = createSlice({
           action.payload?.message || action.payload || action.error?.message || "Login failed";
       })
       .addCase(signupUser.pending, (state) => {
+        state.status = "succeeded";
+        state.sessionEpoch += 1;
+        state.bootstrapRequestId = null;
         state.authStatus = "loading";
         state.authError = null;
       })
       .addCase(signupUser.fulfilled, (state, action) => {
+        state.status = "succeeded";
         state.authStatus = "succeeded";
         state.user = action.payload.user;
         state.session = action.payload.session || null;
@@ -135,9 +157,17 @@ const authSlice = createSlice({
         state.authError =
           action.payload || action.error?.message || "Signup failed";
       })
+      .addCase(logoutUser.pending, (state) => {
+        state.sessionEpoch += 1;
+        state.authStatus = "loading";
+        state.bootstrapRequestId = null;
+      })
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
         state.session = null;
+        state.status = "succeeded";
+        state.bootstrapRequestId = null;
+        state.authStatus = "idle";
       });
   },
 });

@@ -4,6 +4,7 @@ import {
   Link as RouterLink,
   useNavigate,
   useSearchParams,
+  useLocation,
 } from "react-router-dom";
 import {
   Alert,
@@ -49,11 +50,14 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
   const [error, setError] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
   const { authStatus, authError } = useSelector(selectAuth);
   const isLoading = authStatus === "loading";
 
@@ -71,11 +75,13 @@ const Login = () => {
     }
 
     try {
-      await dispatch(loginUser({ email, password })).unwrap();
-      const redirect = searchParams.get("redirect");
-      navigate(redirect?.startsWith("/") ? redirect : "/account");
+      await dispatch(loginUser({ email, password, ...(mfaRequired ? { mfa_code: mfaCode } : {}) })).unwrap();
+      const from = location.state?.from;
+      const redirect = searchParams.get("redirect") || (from && `${from.pathname}${from.search || ""}${from.hash || ""}`);
+      navigate(redirect?.startsWith("/") && !redirect.startsWith("//") ? redirect : "/account");
     } catch (err) {
-      setError(err || "Something went wrong. Try again.");
+      if (err?.requires_mfa) { setMfaRequired(true); return; }
+      setError(getErrorMessage({ error: err }, "Something went wrong. Try again."));
     }
   };
 
@@ -193,6 +199,8 @@ const Login = () => {
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value);
+                    setMfaRequired(false);
+                    setMfaCode("");
                     setEmailError("");
                     setError("");
                   }}
@@ -227,6 +235,8 @@ const Login = () => {
                   value={password}
                   onChange={(event) => {
                     setPassword(event.target.value);
+                    setMfaRequired(false);
+                    setMfaCode("");
                     setError("");
                   }}
                   disabled={isLoading}
@@ -252,6 +262,13 @@ const Login = () => {
                   }}
                 />
 
+                {mfaRequired && <>
+                  <Alert severity="info">Enter the six-digit code from your authenticator app.</Alert>
+                  <TextField label="Authentication code" value={mfaCode}
+                    onChange={event => { setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+                    autoComplete="one-time-code" required disabled={isLoading}
+                    inputProps={{ inputMode: "numeric", pattern: "[0-9]{6}" }} />
+                </>}
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Stack direction="row" spacing={1}>
                     <Typography variant="body2" color="text.secondary">
@@ -270,7 +287,7 @@ const Login = () => {
                   variant="contained"
                   size="large"
                   type="submit"
-                  disabled={isLoading || !email || !password}
+                  disabled={isLoading || !email || !password || (mfaRequired && mfaCode.length !== 6)}
                   endIcon={!isLoading && <ArrowForwardIcon />}
                   sx={{
                     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",

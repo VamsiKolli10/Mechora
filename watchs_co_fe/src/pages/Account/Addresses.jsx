@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import {
+  Alert,
   Box,
   Paper,
   Typography,
@@ -22,25 +23,17 @@ import {
 } from "@mui/material";
 import { Add, Edit, Delete, CheckCircle } from "@mui/icons-material";
 import api from "@/utils/api";
+import { getErrorMessage } from "@/utils/errors";
+import { addressForm, addressPayload } from "@/utils/addresses";
 
 const AccountAddresses = () => {
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
-  const [formData, setFormData] = useState({
-    type: "shipping",
-    label: "",
-    name: "",
-    street: "",
-    street2: "",
-    city: "",
-    state: "",
-    zip: "",
-    country: "US",
-    phone: "",
-    is_default: false,
-  });
+  const [formData, setFormData] = useState(() => addressForm());
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchAddresses();
@@ -52,32 +45,16 @@ const AccountAddresses = () => {
       const { data } = await api.get("/api/account/addresses");
       setAddresses(data);
     } catch (error) {
-      console.error("Failed to fetch addresses:", error);
+      setError(getErrorMessage(error, "Failed to fetch addresses"));
     } finally {
       setLoading(false);
     }
   };
 
   const handleOpen = (address = null) => {
-    if (address) {
-      setEditingAddress(address);
-      setFormData(address);
-    } else {
-      setEditingAddress(null);
-      setFormData({
-        type: "shipping",
-        label: "",
-        name: "",
-        street: "",
-        street2: "",
-        city: "",
-        state: "",
-        zip: "",
-        country: "US",
-        phone: "",
-        is_default: false,
-      });
-    }
+    setEditingAddress(address);
+    setFormData(addressForm(address || {}));
+    setError("");
     setOpen(true);
   };
 
@@ -87,16 +64,21 @@ const AccountAddresses = () => {
   };
 
   const handleSubmit = async () => {
+    setError("");
+    setSaving(true);
     try {
+      const payload = addressPayload(formData);
       if (editingAddress) {
-        await api.put(`/api/account/addresses/${editingAddress.id}`, formData);
+        await api.put(`/api/account/addresses/${editingAddress.id}`, payload);
       } else {
-        await api.post("/api/account/addresses", formData);
+        await api.post("/api/account/addresses", payload);
       }
       fetchAddresses();
       handleClose();
     } catch (error) {
-      console.error("Failed to save address:", error);
+      setError(getErrorMessage(error, "Failed to save address"));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -106,7 +88,7 @@ const AccountAddresses = () => {
         await api.delete(`/api/account/addresses/${id}`);
         fetchAddresses();
       } catch (error) {
-        console.error("Failed to delete address:", error);
+        setError(getErrorMessage(error, "Failed to delete address"));
       }
     }
   };
@@ -116,7 +98,7 @@ const AccountAddresses = () => {
       await api.put(`/api/account/addresses/${id}/default`);
       fetchAddresses();
     } catch (error) {
-      console.error("Failed to set default address:", error);
+      setError(getErrorMessage(error, "Failed to set default address"));
     }
   };
 
@@ -139,6 +121,7 @@ const AccountAddresses = () => {
         </Button>
       </Stack>
 
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Grid container spacing={3}>
         {addresses.map((address) => (
           <Grid item xs={12} md={6} key={address.id}>
@@ -208,6 +191,7 @@ const AccountAddresses = () => {
           {editingAddress ? "Edit Address" : "Add New Address"}
         </DialogTitle>
         <DialogContent>
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -295,7 +279,7 @@ const AccountAddresses = () => {
                   >
                     <MenuItem value="US">United States</MenuItem>
                     <MenuItem value="CA">Canada</MenuItem>
-                    <MenuItem value="UK">United Kingdom</MenuItem>
+                    <MenuItem value="GB">United Kingdom</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -312,7 +296,7 @@ const AccountAddresses = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained">
+          <Button onClick={handleSubmit} variant="contained" disabled={saving}>
             {editingAddress ? "Update" : "Add"} Address
           </Button>
         </DialogActions>

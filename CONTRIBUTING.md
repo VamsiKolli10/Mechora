@@ -18,7 +18,7 @@ npm run test:unit
 npm run test:integration
 ```
 
-Integration tests require a separate reachable PostgreSQL/Supabase test database. They modify test data and must not use production.
+Integration tests require a disposable local PostgreSQL database with migrations applied. The test guard rejects remote hosts; see [the setup guide](watchs_co_be/README_TESTING.md).
 
 From `watchs_co_fe/`:
 
@@ -35,7 +35,7 @@ If an environment prevents integration tests from running, report the exact limi
 - Validate request bodies, params, and query values at route boundaries.
 - Preserve cookie-based auth; do not add tokens to `localStorage`.
 - Never return secrets, password hashes, raw refresh tokens, or payment credentials.
-- Add a migration for every schema change. Do not edit an applied migration.
+- Add a migration under `watchs_co_be/migrations_supabase/` for every schema change. Do not edit an applied migration.
 - Keep order status transitions explicit and distinguish an order request from a paid order.
 - Add or update tests for changed behavior and update `API_DOCUMENTATION.md` for public route changes.
 

@@ -1,7 +1,9 @@
 import api from "@/utils/api";
 
 export const ordersApi = {
-  createOrder(orderData) {
-    return api.post("/api/orders", orderData);
+  createOrder(orderData, requestKey) {
+    return requestKey
+      ? api.post("/api/orders", orderData, { headers: { "Idempotency-Key": requestKey } })
+      : api.post("/api/orders", orderData);
   },
 };

@@ -1,55 +1,28 @@
 const cartRepository = require("../repositories/cartRepository");
+const { withTransaction } = require("../utils/transaction");
 
-const createCartError = (message, status = 400) => {
-  const error = new Error(message);
-  error.status = status;
-  return error;
-};
-
-const getCartRecord = async ({ userId, guestToken }) => {
-  if (userId) return cartRepository.getOrCreateUserCart(userId);
-  if (guestToken) return cartRepository.getOrCreateGuestCart(guestToken);
+const createCartError = (message, status = 400) => Object.assign(new Error(message), { status });
+const getCartRecord = ({ userId, guestToken }, client) => {
+  if (userId) return cartRepository.getOrCreateUserCart(userId, client);
+  if (guestToken) return cartRepository.getOrCreateGuestCart(guestToken, client);
   throw createCartError("User or guest token required");
 };
 
-const getCurrentCart = async ({ userId, guestToken }) => {
-  const cart = await getCartRecord({ userId, guestToken });
-  return cartRepository.getCartWithItems(cart.id);
-};
+const withCart = (context, mutate = null) => withTransaction(async (client) => {
+  const cart = await getCartRecord(context, client);
+  await cartRepository.getCartWithItems(cart.id, client);
+  if (mutate) await mutate(cart.id, client);
+  return cartRepository.getCartWithItems(cart.id, client);
+});
 
-const addItem = async ({ userId, guestToken, watchId, quantity }) => {
-  const cart = await getCartRecord({ userId, guestToken });
-  await cartRepository.addItemToCart(cart.id, watchId, quantity);
-  return cartRepository.getCartWithItems(cart.id);
-};
+const getCurrentCart = context => withCart(context);
+const addItem = context => withCart(context, (id, client) =>
+  cartRepository.addItemToCart(id, context.watchId, context.quantity, client));
+const updateItem = context => withCart(context, (id, client) =>
+  cartRepository.updateCartItemQuantity(id, context.itemId, context.quantity, client));
+const removeItem = context => withCart(context, (id, client) =>
+  cartRepository.removeCartItem(id, context.itemId, client));
+const clearCurrentCart = context => withCart(context, (id, client) => cartRepository.clearCart(id, client));
+const mergeGuestCart = ({ guestToken, userId }) => cartRepository.mergeGuestCartIntoUserCart(guestToken, userId);
 
-const updateItem = async ({ userId, guestToken, itemId, quantity }) => {
-  const cart = await getCartRecord({ userId, guestToken });
-  await cartRepository.updateCartItemQuantity(cart.id, itemId, quantity);
-  return cartRepository.getCartWithItems(cart.id);
-};
-
-const removeItem = async ({ userId, guestToken, itemId }) => {
-  const cart = await getCartRecord({ userId, guestToken });
-  await cartRepository.removeCartItem(cart.id, itemId);
-  return cartRepository.getCartWithItems(cart.id);
-};
-
-const clearCurrentCart = async ({ userId, guestToken }) => {
-  const cart = await getCartRecord({ userId, guestToken });
-  return cartRepository.clearCart(cart.id);
-};
-
-const mergeGuestCart = async ({ guestToken, userId }) => {
-  if (!guestToken) throw createCartError("Guest token required");
-  return cartRepository.mergeGuestCartIntoUserCart(guestToken, userId);
-};
-
-module.exports = {
-  getCurrentCart,
-  addItem,
-  updateItem,
-  removeItem,
-  clearCurrentCart,
-  mergeGuestCart,
-};
+module.exports = { getCurrentCart, addItem, updateItem, removeItem, clearCurrentCart, mergeGuestCart };

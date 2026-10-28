@@ -1,6 +1,6 @@
 # Production backend checklist
 
-The API can run on any Node.js host that supports a long-lived Express process. Keep the API and Vite frontend as separate deployables.
+The API can run on any Node.js 22+ host that supports a long-lived Express process. Keep the API and Vite frontend as separate deployables.
 
 The current MVP creates pending order requests for manual follow-up. Stripe payment collection is intentionally deferred; leave Stripe secrets unset until that feature is enabled and validated.
 
@@ -23,13 +23,15 @@ Use random values of at least 32 characters for `JWT_SECRET`, `JWT_REFRESH_SECRE
 
 ## Migration workflow
 
-Supabase uses a separate baseline stream so the legacy local migrations remain unchanged:
+Both local PostgreSQL and Supabase use `migrations_supabase/`. For Supabase:
 
 ```bash
 npm run migrate:supabase
 ```
 
-The bootstrap detects an already initialized database and records itself without recreating tables. Future schema changes should be new migrations under `migrations_supabase/`.
+The bootstrap detects an already initialized database and records itself without recreating tables. Future schema changes should be new migrations under `migrations_supabase/`. The legacy `migrations/` directory is historical.
+
+Apply the session-version migration before starting the updated API. Password changes, password resets, MFA changes, and logout revoke existing application sessions. The migration defaults existing sessions to version zero, so deploying the column alone does not log everyone out. Rollback of the session-version and checkout retry migrations is intentionally disabled; use a corrective forward migration.
 
 ## Operational requirements
 

@@ -16,7 +16,7 @@ jest.mock("../../../repositories/orderRepository", () => ({
 }));
 
 jest.mock("../../../services/productService", () => ({
-  reserveInventory: jest.fn(),
+  snapshotAvailableItems: jest.fn(),
 }));
 
 const { getClient } = require("../../../db");
@@ -40,13 +40,13 @@ describe("orderService", () => {
   test("calculates server-side checkout totals", () => {
     expect(orderService.calculateTotals(1000)).toEqual({
       subtotal: 1000,
-      taxAmount: 80,
-      shippingAmount: 50,
+      taxAmount: 0,
+      shippingAmount: 0,
     });
 
     expect(orderService.calculateTotals(6000)).toEqual({
       subtotal: 6000,
-      taxAmount: 480,
+      taxAmount: 0,
       shippingAmount: 0,
     });
   });
@@ -62,7 +62,7 @@ describe("orderService", () => {
     };
     const cart = {
       id: 10,
-      subtotal: 2000,
+      subtotal: 1,
       items: [{ watch_id: 5, quantity: 1, price_at_added: 2000 }],
     };
     const reservedItems = [
@@ -78,7 +78,7 @@ describe("orderService", () => {
 
     cartRepository.getOrCreateUserCart.mockResolvedValue({ id: 10 });
     cartRepository.getCartWithItems.mockResolvedValue(cart);
-    productService.reserveInventory.mockResolvedValue(reservedItems);
+    productService.snapshotAvailableItems.mockResolvedValue(reservedItems);
     orderRepository.createOrder.mockResolvedValue(createdOrder);
     orderRepository.getOrderById.mockResolvedValue(fullOrder);
 
@@ -93,8 +93,8 @@ describe("orderService", () => {
       expect.objectContaining({
         user_id: 7,
         subtotal: 2000,
-        tax_amount: 160,
-        shipping_amount: 50,
+        tax_amount: 0,
+        shipping_amount: 0,
         shipping_address: shippingAddress,
       }),
       client
